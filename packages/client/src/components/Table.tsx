@@ -68,7 +68,7 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
                 } as React.CSSProperties
               }
             >
-              {rolls[player.id] !== undefined && <Die value={rolls[player.id]!} />}
+              {rolls[player.id] !== undefined && <Die value={rolls[player.id]!} style={player.dice} />}
             </div>
             <div className="seat-name">
               {player.isHost && <span title="Хост">♛ </span>}

@@ -186,18 +186,8 @@ input, select {
 .round { color: var(--accent); }
 .winner { font-size: 1.3rem; }
 
-/* Кубик: светлая грань, тень снизу-справа и жёсткая тень на ковер. */
-.die {
-  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr);
-  padding: 4px; gap: 1px;
-  background: #fbf8ef; border-radius: 6px;
-  box-shadow:
-    inset -3px -3px 0 #d4ccb6,
-    inset 2px 2px 0 #fff,
-    0 4px 0 #0009;
-}
-.die span { display: grid; place-items: center; }
-.die .pip::after { content: ''; width: 70%; aspect-ratio: 1; border-radius: 50%; background: #1a1a1a; }
+/* Кубик рисуется SVG (components/Die.tsx); здесь только жёсткая тень на коврик. */
+.die { display: block; image-rendering: pixelated; filter: drop-shadow(0 3px 0 #0009); }
 
 @media (max-width: 420px) {
   .table { min-height: 460px; padding: 10px 6px; border-width: 8px; }

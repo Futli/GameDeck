@@ -1,3 +1,4 @@
+import { DEFAULT_DICE_STYLE } from '@gamedeck/shared';
 import { describe, expect, it } from 'vitest';
 import type { PerudoView } from '@gamedeck/shared';
 import { RoomManager } from '../src/rooms/room-manager.js';
@@ -12,7 +13,7 @@ describe('RoomManager', () => {
     const room = rooms.create(alice);
     expect(room.code).toMatch(/^[A-Z2-9]{5}$/);
     expect(room.toView().players).toEqual([
-      { id: 'alice', name: 'Алиса', seat: 0, color: 'red', isHost: true, connected: true },
+      { id: 'alice', name: 'Алиса', seat: 0, color: 'red', dice: DEFAULT_DICE_STYLE, isHost: true, connected: true },
     ]);
   });
 

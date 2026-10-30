@@ -1,8 +1,10 @@
 import {
+  DEFAULT_DICE_STYLE,
   GameRuleError,
   MAX_PLAYERS,
   PLAYER_COLORS,
   games,
+  type DiceStyle,
   type GameModule,
   type PlayerColor,
   type RoomSettings,
@@ -17,6 +19,7 @@ interface Player {
   name: string;
   seat: number;
   color: PlayerColor;
+  dice: DiceStyle;
   connected: boolean;
 }
 
@@ -25,6 +28,8 @@ export interface PlayerInfo {
   name: string;
   /** Желаемый цвет; если занят или не задан — первый свободный. */
   color?: PlayerColor;
+  /** Скин кубиков из надетых предметов; без него — классический. */
+  dice?: DiceStyle;
 }
 
 interface ActiveGame {
@@ -75,14 +80,21 @@ export class Room {
   ) {
     this.settings = { ...defaultSettings, ...settings, password: settings.password || null };
     this.hostId = host.id;
-    this.players.set(host.id, { id: host.id, name: host.name, seat: 0, color: this.pickColor(host.color), connected: true });
+    this.players.set(host.id, {
+      id: host.id,
+      name: host.name,
+      seat: 0,
+      color: this.pickColor(host.color),
+      dice: host.dice ?? DEFAULT_DICE_STYLE,
+      connected: true,
+    });
   }
 
   get isEmpty(): boolean {
     return this.players.size === 0;
   }
 
-  addPlayer({ id, name, color }: PlayerInfo, password?: string): void {
+  addPlayer({ id, name, color, dice }: PlayerInfo, password?: string): void {
     if (this.players.has(id)) return; // повторный вход — не ошибка
     if (this.status === 'playing') throw new AppError('GAME_IN_PROGRESS', 'Игра уже идёт');
     if (this.settings.password && this.settings.password !== password) {
@@ -91,7 +103,14 @@ export class Room {
     if (this.players.size >= this.settings.maxPlayers) {
       throw new AppError('ROOM_FULL', 'Комната заполнена');
     }
-    this.players.set(id, { id, name, seat: this.freeSeat(), color: this.pickColor(color), connected: true });
+    this.players.set(id, {
+      id,
+      name,
+      seat: this.freeSeat(),
+      color: this.pickColor(color),
+      dice: dice ?? DEFAULT_DICE_STYLE,
+      connected: true,
+    });
   }
 
   /** Сменить свой цвет на свободный. Можно и во время игры — это только внешний вид. */

@@ -1,3 +1,4 @@
+import type { DiceStyle } from './dice-style.js';
 import type {
   ColorInput,
   CreateRoomInput,
@@ -17,6 +18,8 @@ export interface PlayerView {
   seat: number;
   /** Цвет игрока: стакан и кубики на столе рисуются этим цветом. */
   color: PlayerColor;
+  /** Скин кубиков: надетый предмет из магазина (слот dice). */
+  dice: DiceStyle;
   isHost: boolean;
   connected: boolean;
 }

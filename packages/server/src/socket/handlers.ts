@@ -85,12 +85,12 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
    * Благодаря ей обработчики ниже — это 2–3 строки чистой логики.
    */
   const handle =
-    <T>(fn: (args: unknown[]) => T) =>
-    (...args: unknown[]) => {
+    <T>(fn: (args: unknown[]) => T | Promise<T>) =>
+    async (...args: unknown[]) => {
       const ack = args.at(-1);
       if (typeof ack !== 'function') return; // клиент без ack — игнорируем
       try {
-        (ack as Ack<T>)({ ok: true, data: fn(args) });
+        (ack as Ack<T>)({ ok: true, data: await fn(args) });
       } catch (err) {
         (ack as Ack<T>)(toErrorResult(err, log));
       }
@@ -136,11 +136,12 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
 
     socket.on(
       'room:create',
-      handle(([input]) => {
+      handle(async ([input]) => {
         const { name, color, settings } = createRoomSchema.parse(input);
+        const dice = await players.diceStyle(playerId);
         const previous = rooms.roomOf(playerId);
         if (previous) exitRoom(previous.code, playerId);
-        const room = rooms.create({ id: playerId, name, color }, settings);
+        const room = rooms.create({ id: playerId, name, color, dice }, settings);
         saveName(playerId, name);
         broadcast(previous);
         return enterRoom(room);
@@ -149,10 +150,11 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
 
     socket.on(
       'room:join',
-      handle(([input]) => {
+      handle(async ([input]) => {
         const { code, name, password, color } = joinRoomSchema.parse(input);
+        const dice = await players.diceStyle(playerId);
         const previous = rooms.roomOf(playerId);
-        const room = rooms.join({ id: playerId, name, color }, code, password);
+        const room = rooms.join({ id: playerId, name, color, dice }, code, password);
         saveName(playerId, name);
         if (previous && previous !== room) {
           exitRoom(previous.code, playerId);

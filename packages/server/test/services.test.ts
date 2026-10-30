@@ -103,6 +103,22 @@ describe('база: игроки, статистика, магазин', () => {
       await expect(shop.buyWithCoins(playerId, 'mat-dragon')).rejects.toThrow('только за Stars');
     });
 
+    it('надетый скин кубиков определяет цвет грани и точек за столом', async () => {
+      const { playerId } = await players.register();
+      expect(await players.diceStyle(playerId)).toEqual({ face: '#fbf8ef', pips: '#1a1a1a' });
+      await shop.buyWithCoins(playerId, 'dice-casino').catch(() => {}); // 1000 > 500 монет
+      await shop.applyStarsPayment({
+        playerId,
+        telegramChargeId: `dice-${playerId}`,
+        productKind: 'coin_pack',
+        productId: 'coins-500',
+        stars: 25,
+      });
+      await shop.buyWithCoins(playerId, 'dice-casino');
+      await shop.equip(playerId, 'dice-casino');
+      expect(await players.diceStyle(playerId)).toEqual({ face: '#d91e2b', pips: '#ffffff' });
+    });
+
     it('надеть можно только свой предмет, он занимает слот своего вида', async () => {
       const { playerId } = await players.register();
       await expect(shop.equip(playerId, 'mat-wood')).rejects.toThrow('Сначала купите');

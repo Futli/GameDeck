@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { SessionInfo } from '@gamedeck/shared';
-import { desc, eq } from 'drizzle-orm';
+import { parseDiceStyle, type DiceStyle, type SessionInfo } from '@gamedeck/shared';
+import { and, desc, eq } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   items,
@@ -108,6 +108,16 @@ export class PlayerService {
       this.equipment(playerId),
     ]);
     return { ...player, stats, recentMatches: recent, equipment };
+  }
+
+  /** Стиль надетого скина кубиков (цвет грани и точек) — его видят все за столом. */
+  async diceStyle(playerId: string): Promise<DiceStyle> {
+    const [row] = await this.db
+      .select({ asset: items.asset })
+      .from(playerEquipment)
+      .innerJoin(items, eq(items.id, playerEquipment.itemId))
+      .where(and(eq(playerEquipment.playerId, playerId), eq(playerEquipment.slot, 'dice')));
+    return parseDiceStyle(row?.asset);
   }
 
   /** Надетые предметы: { mat: 'mat-neon', dice: 'dice-classic', ... }. */
