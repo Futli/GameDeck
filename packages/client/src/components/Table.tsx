@@ -1,6 +1,6 @@
 import type React from 'react';
 import { PLAYER_COLOR_HEX, games, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
-import { screenPosition, seatsWithPlayers } from '../lib/table';
+import { isSidePosition, screenPosition, seatsWithPlayers } from '../lib/table';
 import { Die } from './Die';
 
 interface Props {
@@ -34,7 +34,8 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
     <div className="table">
       {seatsWithPlayers(room.players).map(({ seat, player }) => {
         const position = screenPosition(seat, mySeat);
-        if (!player) return <div key={seat} className={`seat seat--${position} seat--empty`} />;
+        const side = isSidePosition(position) && 'seat--side';
+        if (!player) return <div key={seat} className={['seat', `seat--${position}`, side, 'seat--empty'].filter(Boolean).join(' ')} />;
 
         const isTurn = game?.currentPlayerId === player.id;
         const isWinner = game?.winnerId === player.id;
@@ -48,6 +49,7 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
             className={[
               'seat',
               `seat--${position}`,
+              side,
               isTurn && 'seat--turn',
               isWinner && 'seat--winner',
               out && 'seat--out',
@@ -58,7 +60,13 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
           >
             <div
               className="mat"
-              style={{ '--c1': PLAYER_COLOR_HEX[player.color].main, '--c2': PLAYER_COLOR_HEX[player.color].shade } as React.CSSProperties}
+              style={
+                {
+                  '--light': PLAYER_COLOR_HEX[player.color].light,
+                  '--main': PLAYER_COLOR_HEX[player.color].main,
+                  '--shade': PLAYER_COLOR_HEX[player.color].shade,
+                } as React.CSSProperties
+              }
             >
               {rolls[player.id] !== undefined && <Die value={rolls[player.id]!} />}
             </div>
