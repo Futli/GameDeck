@@ -1,25 +1,32 @@
 import type {
+  ColorInput,
   CreateRoomInput,
   JoinRoomInput,
   KickInput,
   MoveInput,
+  PlayerColor,
   RoomSettings,
   UpdateSettingsInput,
 } from './schemas.js';
 
-/** Что видят все игроки в комнате. Сервер шлёт это целиком после каждого изменения. */
+/** Игрок в комнате. Сервер шлёт RoomView целиком после каждого изменения. */
 export interface PlayerView {
   id: string;
   name: string;
   /** Место за столом 0..5. Клиент поворачивает стол так, чтобы своё место было снизу. */
   seat: number;
+  /** Цвет игрока: стакан и кубики на столе рисуются этим цветом. */
+  color: PlayerColor;
   isHost: boolean;
   connected: boolean;
 }
 
 export interface GameView {
   gameId: string;
-  /** Состояние конкретной игры (для dice-high — DiceHighState). */
+  /**
+   * Состояние игры глазами получателя (для dice-high — DiceHighState,
+   * для perudo — PerudoView без чужих кубиков). Каждый игрок получает свою версию.
+   */
   state: unknown;
   currentPlayerId: string | null;
   winnerId: string | null;
@@ -27,6 +34,11 @@ export interface GameView {
 
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 
+/**
+ * Комната глазами одного игрока. Сервер шлёт её целиком после каждого
+ * изменения — каждому свою, потому что в играх со скрытой информацией
+ * (перудо) чужие кубики в неё не попадают.
+ */
 export interface RoomView {
   code: string;
   status: RoomStatus;
@@ -52,6 +64,7 @@ export interface ClientToServerEvents {
   'room:leave': (ack: Ack<null>) => void;
   'room:settings': (input: UpdateSettingsInput, ack: Ack<RoomView>) => void;
   'room:kick': (input: KickInput, ack: Ack<RoomView>) => void;
+  'room:color': (input: ColorInput, ack: Ack<RoomView>) => void;
   'game:start': (ack: Ack<RoomView>) => void;
   'game:move': (input: MoveInput, ack: Ack<RoomView>) => void;
 }

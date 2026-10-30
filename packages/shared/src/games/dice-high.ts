@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { GameRuleError, type GameModule, type Rng } from './types.js';
 
 /**
@@ -18,7 +19,8 @@ export interface DiceHighState {
   winnerId: string | null;
 }
 
-export type DiceHighMove = { type: 'roll' };
+export const diceHighMoveSchema = z.object({ type: z.literal('roll') });
+export type DiceHighMove = z.infer<typeof diceHighMoveSchema>;
 
 export const rollD6 = (rng: Rng): number => Math.floor(rng() * 6) + 1;
 
@@ -48,6 +50,7 @@ export const diceHigh: GameModule<DiceHighState, DiceHighMove> = {
   title: 'Бросок кубика',
   minPlayers: 2,
   maxPlayers: 6,
+  moveSchema: diceHighMoveSchema,
 
   start(playerIds) {
     if (playerIds.length < this.minPlayers) {
