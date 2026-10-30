@@ -16,14 +16,14 @@ export const MAX_PLAYERS = 6;
 export const PLAYER_COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'] as const;
 export const playerColorSchema = z.enum(PLAYER_COLORS);
 
-/** Базовые оттенки для клиента (пиксельный стиль: основной и тень). */
-export const PLAYER_COLOR_HEX: Record<PlayerColor, { main: string; shade: string }> = {
-  red: { main: '#e5484d', shade: '#a8262b' },
-  blue: { main: '#3e8ef7', shade: '#1f5bb0' },
-  green: { main: '#46a758', shade: '#2a6b37' },
-  yellow: { main: '#f5c542', shade: '#b38a1a' },
-  purple: { main: '#8e4ec6', shade: '#5b2c86' },
-  orange: { main: '#f76b15', shade: '#b04a0a' },
+/** Оттенки для клиента в пиксельном стиле: блик, основной и тень. Насыщенные, чтобы читались на сукне. */
+export const PLAYER_COLOR_HEX: Record<PlayerColor, { light: string; main: string; shade: string }> = {
+  red: { light: '#ff7a84', main: '#ff2d3d', shade: '#a8101c' },
+  blue: { light: '#73b4ff', main: '#1f7bff', shade: '#0b46a8' },
+  green: { light: '#7ff09a', main: '#18c447', shade: '#0b7228' },
+  yellow: { light: '#ffe873', main: '#ffc800', shade: '#a87d00' },
+  purple: { light: '#d08eff', main: '#a53cff', shade: '#5e12a8' },
+  orange: { light: '#ffaa66', main: '#ff6a00', shade: '#a84300' },
 };
 
 export const playerNameSchema = z.string().trim().min(1).max(24);

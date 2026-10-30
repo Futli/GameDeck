@@ -1,5 +1,5 @@
 import type { RoomSettings } from '@gamedeck/shared';
-import { RoomError } from '../errors.js';
+import { AppError } from '../errors.js';
 import { Room, type PlayerInfo } from './room.js';
 
 // Без 0/O и 1/I, чтобы код было легко продиктовать.
@@ -39,7 +39,7 @@ export class RoomManager {
 
   join(player: PlayerInfo, code: string, password?: string): Room {
     const room = this.get(code);
-    if (!room) throw new RoomError('ROOM_NOT_FOUND', 'Комната не найдена');
+    if (!room) throw new AppError('ROOM_NOT_FOUND', 'Комната не найдена');
     if (this.roomOfPlayer.get(player.id) !== room.code) this.leave(player.id);
     room.addPlayer(player, password);
     this.roomOfPlayer.set(player.id, room.code);
@@ -56,7 +56,7 @@ export class RoomManager {
 
   kick(byId: string, targetId: string): Room {
     const room = this.roomOf(byId);
-    if (!room) throw new RoomError('NOT_IN_ROOM', 'Вы не в комнате');
+    if (!room) throw new AppError('NOT_IN_ROOM', 'Вы не в комнате');
     room.kick(byId, targetId);
     this.afterRemoval(room, targetId);
     return room;

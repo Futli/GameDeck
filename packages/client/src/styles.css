@@ -1,0 +1,196 @@
+/* Минималистичная тёмная тема. Цвета — переменные, чтобы позже подменить их темой Telegram. */
+:root {
+  --bg: #14161a;
+  --surface: #1d2026;
+  --surface-2: #262a32;
+  --text: #e8e9ec;
+  --muted: #8b909a;
+  --accent: #f2b33d;
+  --accent-text: #1a1406;
+  --good: #57c27a;
+  --bad: #e5615a;
+  --felt: #1f4d3a;
+  --felt-edge: #163528;
+  --radius: 12px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+button, input, select { font: inherit; color: inherit; }
+
+button {
+  border: 0;
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+button.big { padding: 14px 24px; font-size: 1.1rem; min-width: 220px; }
+button.ghost { background: transparent; color: var(--muted); padding-left: 0; }
+
+input, select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.app { max-width: 720px; margin: 0 auto; padding: 16px; min-height: 100dvh; }
+.muted { color: var(--muted); }
+.banner { text-align: center; color: var(--muted); padding: 8px; }
+
+.notice {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+  background: var(--surface-2); padding: 10px 16px; border-radius: var(--radius);
+  box-shadow: 0 4px 20px #0008; max-width: calc(100% - 32px);
+}
+
+/* ─── Лобби ─────────────────────────────────────────────── */
+
+.lobby { display: flex; flex-direction: column; gap: 14px; max-width: 360px; margin: 10vh auto 0; }
+.logo { margin: 0; font-size: 2.2rem; letter-spacing: 0.02em; }
+.logo + .muted { margin: -8px 0 8px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > span { color: var(--muted); font-size: 0.9rem; }
+.field.row { flex-direction: row; align-items: center; gap: 10px; }
+.field.row > span { flex: 1; }
+.field.row > input, .field.row > select { width: 120px; }
+.divider { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+.join { display: flex; flex-direction: column; gap: 10px; }
+.code-input { text-align: center; font-size: 1.6rem; letter-spacing: 0.3em; text-transform: uppercase; }
+
+/* ─── Комната ───────────────────────────────────────────── */
+
+.room { display: flex; flex-direction: column; gap: 16px; }
+.room-header { display: flex; justify-content: space-between; align-items: center; }
+.code { font-family: ui-monospace, monospace; letter-spacing: 0.15em; }
+.actions { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 56px; }
+.panel { background: var(--surface); border-radius: var(--radius); padding: 12px 16px; }
+.panel summary { cursor: pointer; color: var(--muted); }
+.panel .field { margin-top: 12px; }
+
+/* ─── Стол ──────────────────────────────────────────────── */
+
+/*
+ * Раскладка: один снизу, два слева, один сверху, два справа.
+ * Сетка 3 колонки × 4 ряда; центр стола занимает два средних ряда.
+ *
+ *   .          top     .
+ *   left-high  mid     right-high
+ *   left-low   mid     right-low
+ *   .          bottom  .
+ */
+.table {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto 1fr 1fr auto;
+  grid-template-areas:
+    '.    top    .'
+    'lh   mid    rh'
+    'll   mid    rl'
+    '.    bottom .';
+  gap: 10px 6px;
+  padding: 14px 10px;
+  min-height: 520px;
+  /* Сукно: насыщенный зелёный с затемнением к краям и деревянный бортик. */
+  background:
+    radial-gradient(ellipse at 50% 45%, #1b9a5c 0%, #12764a 45%, #0a4a2e 100%);
+  border: 10px solid #6b3a1a;
+  border-radius: 32px;
+  box-shadow:
+    inset 0 0 0 3px #3d1f0c,          /* тёмный кант по внутреннему краю бортика */
+    inset 0 10px 30px #0008,          /* тень от бортика на сукно */
+    0 0 0 3px #9a5a2c,                /* светлый блик по внешнему краю дерева */
+    0 14px 0 #0006,                   /* жёсткая «пиксельная» тень стола */
+    0 24px 40px #000a;                /* мягкая тень под столом */
+}
+
+.seat { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; }
+.seat--bottom { grid-area: bottom; }
+.seat--left-low { grid-area: ll; }
+.seat--left-high { grid-area: lh; }
+.seat--top { grid-area: top; }
+.seat--right-high { grid-area: rh; }
+.seat--right-low { grid-area: rl; }
+.seat--side { justify-content: center; }
+
+.seat--empty::before {
+  content: ''; width: 128px; height: 64px;
+  border: 2px dashed #ffffff26; border-radius: 4px;
+  background: #0000001a;
+}
+.seat--side.seat--empty::before { width: 64px; height: 128px; }
+
+.seat-name {
+  font-size: 0.85rem; text-align: center; max-width: 140px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-shadow: 0 2px 0 #000a;
+}
+.seat--side .seat-name { max-width: 76px; }
+.seat--offline { opacity: 0.45; }
+.seat--out .mat { filter: grayscale(0.85) brightness(0.8); }
+.seat--turn .mat { outline: 3px solid var(--accent); outline-offset: 3px; animation: pulse 1.2s ease-in-out infinite; }
+.seat--winner .mat { outline: 3px solid #5cff8a; outline-offset: 3px; }
+.delta.up { color: var(--good); }
+.delta.down { color: var(--bad); }
+
+.kick {
+  position: absolute; top: -8px; right: -6px; z-index: 1;
+  padding: 2px 6px; font-size: 0.75rem; background: #000a; color: var(--muted);
+}
+
+@keyframes pulse { 50% { outline-color: transparent; } }
+
+/*
+ * Коврик игрока: 128×64 логических пикселя (на боковых местах — 64×128, стоит вдоль края).
+ * Три тона цвета игрока: блик, основной, тень. Шахматка с шагом 8px даёт пиксельный узор,
+ * объём — «пиксельные» тени без размытия: светлый край сверху-слева, тёмный снизу-справа
+ * и жёсткая тень под ковриком.
+ */
+.mat {
+  --light: #73b4ff; --main: #1f7bff; --shade: #0b46a8;
+  width: 128px; height: 64px;
+  display: grid; place-items: center;
+  border-radius: 3px;
+  image-rendering: pixelated;
+  background:
+    repeating-conic-gradient(var(--main) 0 25%, color-mix(in srgb, var(--main) 78%, var(--shade)) 0 50%) 0 0 / 16px 16px;
+  box-shadow:
+    inset 4px 4px 0 var(--light),
+    inset -4px -4px 0 var(--shade),
+    inset 0 0 0 6px color-mix(in srgb, var(--shade) 50%, transparent),
+    0 6px 0 #00000080,
+    0 10px 16px #0007;
+}
+.seat--side .mat { width: 64px; height: 128px; }
+
+.table-center {
+  grid-area: mid;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; text-align: center;
+  text-shadow: 0 2px 0 #0009;
+}
+.game-title { font-size: 1.2rem; font-weight: 700; }
+.round { color: var(--accent); }
+.winner { font-size: 1.3rem; }
+
+/* Кубик рисуется SVG (components/Die.tsx); здесь только жёсткая тень на коврик. */
+.die { display: block; image-rendering: pixelated; filter: drop-shadow(0 3px 0 #0009); }
+
+@media (max-width: 420px) {
+  .table { min-height: 460px; padding: 10px 6px; border-width: 8px; }
+  .mat, .seat--empty::before { width: 104px; height: 52px; }
+  .seat--side .mat, .seat--side.seat--empty::before { width: 52px; height: 104px; }
+}

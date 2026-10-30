@@ -2,28 +2,40 @@ import { randomInt } from 'node:crypto';
 import type { Rng } from '@gamedeck/shared';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 import { Server } from 'socket.io';
+import { registerClient } from './http/client.js';
 import { registerHttpRoutes } from './http/routes.js';
+import type { Db } from './db/client.js';
+import { PlayerService } from './players/player-service.js';
 import { RoomManager } from './rooms/room-manager.js';
-import { SessionStore } from './socket/sessions.js';
+import { ShopService } from './shop/shop-service.js';
 import { registerSocketHandlers, type GameServer } from './socket/handlers.js';
+import { StatsService } from './stats/stats-service.js';
 
 /** Криптостойкий ГСЧ: бросок нельзя предсказать по предыдущим. */
 export const cryptoRng: Rng = () => randomInt(0, 2 ** 32) / 2 ** 32;
 
 export interface AppOptions {
+  db: Db;
+  startingCoins?: number;
+  /** Отдавать собранный клиент (packages/client/dist). В тестах не нужно. */
+  serveClient?: boolean;
   logger?: FastifyServerOptions['logger'];
   rng?: Rng;
   disconnectGraceMs?: number;
 }
 
 /**
- * Собирает приложение, но не запускает его. Так тесты могут поднять сервер
+ * Собирает приложение, но не запускает его. База передаётся снаружи:
+ * index.ts открывает настоящую, тесты — PGlite в памяти. Так тесты могут поднять сервер
  * на случайном порту, а index.ts — на настоящем.
  */
-export function buildApp(options: AppOptions = {}) {
+export async function buildApp(options: AppOptions) {
   const app = Fastify({ logger: options.logger ?? false });
   const rooms = new RoomManager();
-  const sessions = new SessionStore();
+  const players = new PlayerService(options.db, options.startingCoins);
+  const stats = new StatsService(options.db);
+  const shop = new ShopService(options.db);
+  await shop.syncCatalog();
 
   // Socket.IO вешается на тот же http-сервер, что и Fastify: один порт для всего.
   const io: GameServer = new Server(app.server, {
@@ -35,12 +47,14 @@ export function buildApp(options: AppOptions = {}) {
   const disposeSockets = registerSocketHandlers({
     io,
     rooms,
-    sessions,
+    players,
+    stats,
     rng: options.rng ?? cryptoRng,
     disconnectGraceMs: options.disconnectGraceMs ?? 60_000,
     log: app.log,
   });
-  registerHttpRoutes(app, rooms);
+  registerHttpRoutes(app, { rooms, players, stats, shop });
+  if (options.serveClient) await registerClient(app);
 
   // Перед остановкой HTTP закрываем все сокеты, иначе server.close() будет ждать их вечно.
   app.addHook('preClose', async () => {
@@ -49,5 +63,5 @@ export function buildApp(options: AppOptions = {}) {
     io.engine.close();
   });
 
-  return { app, io, rooms };
+  return { app, io, rooms, players, stats, shop };
 }

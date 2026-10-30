@@ -1,8 +1,9 @@
 import type { AddressInfo } from 'node:net';
-import type { ClientToServerEvents, PerudoView, RoomView, ServerToClientEvents, SessionInfo } from '@gamedeck/shared';
+import type { ClientToServerEvents, MatchRecord, PerudoView, RoomView, ServerToClientEvents, SessionInfo } from '@gamedeck/shared';
 import { io as connect, type Socket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
+import { testDatabase } from './helpers.js';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -16,7 +17,8 @@ describe('socket protocol', () => {
     // Каждый бросок = 6, поэтому первый раунд всегда ничья — проверим переброс.
     let roll = 0;
     const faces = [6, 6, 3, 5];
-    const { app } = buildApp({ rng: () => ((faces[roll++ % faces.length] ?? 1) - 1) / 6, disconnectGraceMs: 50 });
+    const { db } = await testDatabase();
+    const { app } = await buildApp({ db, rng: () => ((faces[roll++ % faces.length] ?? 1) - 1) / 6, disconnectGraceMs: 50 });
     await app.listen({ host: '127.0.0.1', port: 0 });
     url = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
     close = () => app.close();
@@ -55,6 +57,7 @@ describe('socket protocol', () => {
     expect(notHost).toMatchObject({ ok: false, error: { code: 'NOT_HOST' } });
 
     await call(a.socket.emitWithAck('game:start'));
+    const recorded = new Promise<MatchRecord>((resolve) => a.socket.once('match:recorded', resolve));
     const outOfTurn = await b.socket.emitWithAck('game:move', { type: 'roll' });
     expect(outOfTurn).toMatchObject({ ok: false, error: { code: 'NOT_YOUR_TURN' } });
 
@@ -67,6 +70,11 @@ describe('socket protocol', () => {
 
     expect(view.status).toBe('finished');
     expect(view.game?.winnerId).toBe(b.session.playerId);
+
+    // После партии сервер пишет её в базу и рассылает изменение рейтинга.
+    const record = await recorded;
+    const bob = record.players.find((p) => p.playerId === b.session.playerId);
+    expect(bob).toMatchObject({ place: 1, ratingBefore: 1000, ratingAfter: 1016 });
   });
 
   it('отклоняет кривые данные через zod', async () => {

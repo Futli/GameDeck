@@ -1,3 +1,4 @@
+import type { DiceStyle } from './dice-style.js';
 import type {
   ColorInput,
   CreateRoomInput,
@@ -17,6 +18,8 @@ export interface PlayerView {
   seat: number;
   /** Цвет игрока: стакан и кубики на столе рисуются этим цветом. */
   color: PlayerColor;
+  /** Скин кубиков: надетый предмет из магазина (слот dice). */
+  dice: DiceStyle;
   isHost: boolean;
   connected: boolean;
 }
@@ -73,6 +76,14 @@ export interface ServerToClientEvents {
   session: (session: SessionInfo) => void;
   'room:state': (room: RoomView) => void;
   'room:kicked': (info: { code: string }) => void;
+  /** Партия сохранена в базе: места и изменение рейтинга у каждого. */
+  'match:recorded': (result: MatchRecord) => void;
+}
+
+export interface MatchRecord {
+  matchId: string;
+  gameId: string;
+  players: Array<{ playerId: string; place: number; ratingBefore: number; ratingAfter: number }>;
 }
 
 /** Данные, которые Socket.IO хранит на каждом сокете (socket.data). */

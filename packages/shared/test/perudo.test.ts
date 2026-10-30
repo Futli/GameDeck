@@ -14,6 +14,7 @@ const table = (hands: Record<string, number[]>, over: Partial<PerudoState> = {})
   round: 1,
   palifico: false,
   palificoUsed: [],
+  eliminated: [],
   turnId: Object.keys(hands)[0]!,
   bids: [],
   lastReveal: null,

@@ -103,4 +103,21 @@ export const diceHigh: GameModule<DiceHighState, DiceHighMove> = {
   winner(state) {
     return state.winnerId;
   },
+
+  standings(state) {
+    // Идём от последнего раунда к первому: кто дольше продержался в перебросах, тот выше.
+    // Внутри раунда выбывшие упорядочены по выпавшему значению.
+    const placed = new Set<string>(state.winnerId ? [state.winnerId] : []);
+    const groups: string[][] = state.winnerId ? [[state.winnerId]] : [];
+    for (const { rolls } of [...state.history].reverse()) {
+      const byValue = new Map<number, string[]>();
+      for (const [id, value] of Object.entries(rolls)) {
+        if (placed.has(id)) continue;
+        placed.add(id);
+        byValue.set(value, [...(byValue.get(value) ?? []), id]);
+      }
+      [...byValue.entries()].sort(([a], [b]) => b - a).forEach(([, ids]) => groups.push(ids));
+    }
+    return groups;
+  },
 };

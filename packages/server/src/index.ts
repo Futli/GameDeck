@@ -1,7 +1,13 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
+import { openDatabase } from './db/client.js';
 
-const { app } = buildApp({
+// Сначала база (с миграциями), потом приложение: без базы сервер не стартует.
+const database = await openDatabase(config.databaseUrl);
+const { app } = await buildApp({
+  db: database.db,
+  startingCoins: config.startingCoins,
+  serveClient: true,
   logger: { level: config.logLevel },
   disconnectGraceMs: config.disconnectGraceMs,
 });
@@ -10,7 +16,10 @@ const { app } = buildApp({
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     app.log.info({ signal }, 'shutting down');
-    void app.close().then(() => process.exit(0));
+    void app
+      .close()
+      .then(() => database.close())
+      .then(() => process.exit(0));
   });
 }
 

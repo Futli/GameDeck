@@ -53,6 +53,8 @@ export interface PerudoState {
   palifico: boolean;
   /** Кто уже вызывал палифико: у каждого оно бывает один раз. */
   palificoUsed: string[];
+  /** Кто остался без кубиков, в порядке выбывания. Нужно для мест в рейтинге. */
+  eliminated: string[];
   turnId: string | null;
   /** Ставки текущего раунда, последняя — действующая. */
   bids: PerudoBid[];
@@ -171,6 +173,7 @@ function resolveRound(state: PerudoState, callerId: string, call: 'dudo' | 'calz
     dice: Object.fromEntries(state.order.map((id) => [id, new Array<number>(counts[id]!).fill(0)])),
     lastReveal: reveal,
     bids: [],
+    eliminated: loserId && counts[loserId] === 0 ? [...state.eliminated, loserId] : state.eliminated,
   };
 
   const alive = activePlayers(sized);
@@ -207,6 +210,7 @@ export const perudo: GameModule<PerudoState, PerudoMove> = {
       round: 1,
       palifico: false,
       palificoUsed: [],
+      eliminated: [],
       turnId: playerIds[0]!,
       bids: [],
       lastReveal: null,
@@ -264,6 +268,12 @@ export const perudo: GameModule<PerudoState, PerudoMove> = {
 
   winner(state) {
     return state.winnerId;
+  },
+
+  standings(state) {
+    // Победитель, затем выбывшие: кто продержался дольше, тот выше.
+    const groups = state.winnerId ? [[state.winnerId]] : [];
+    return [...groups, ...[...state.eliminated].reverse().map((id) => [id])];
   },
 
   viewFor(state, viewerId): PerudoView {

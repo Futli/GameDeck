@@ -1,3 +1,4 @@
+import { DEFAULT_DICE_STYLE } from '@gamedeck/shared';
 import { describe, expect, it } from 'vitest';
 import type { PerudoView } from '@gamedeck/shared';
 import { RoomManager } from '../src/rooms/room-manager.js';
@@ -12,7 +13,7 @@ describe('RoomManager', () => {
     const room = rooms.create(alice);
     expect(room.code).toMatch(/^[A-Z2-9]{5}$/);
     expect(room.toView().players).toEqual([
-      { id: 'alice', name: 'Алиса', seat: 0, color: 'red', isHost: true, connected: true },
+      { id: 'alice', name: 'Алиса', seat: 0, color: 'red', dice: DEFAULT_DICE_STYLE, isHost: true, connected: true },
     ]);
   });
 
@@ -114,5 +115,26 @@ describe('RoomManager', () => {
     expect(() => room.move('alice', { type: 'roll' }, Math.random)).toThrow();
     room.move('alice', { type: 'bid', quantity: 2, face: 3 }, Math.random);
     expect(room.toView().game?.currentPlayerId).toBe('bob');
+  });
+
+  it('после партии комната один раз отдаёт итог с местами; ушедший — последний', () => {
+    const rooms = new RoomManager();
+    const room = rooms.create(alice, { stake: 50 });
+    rooms.join(bob, room.code);
+    rooms.join(carol, room.code);
+    room.startGame('alice', Math.random);
+
+    room.move('alice', { type: 'roll' }, () => 0); // 1
+    rooms.leave('carol'); // ушла посреди партии
+    room.move('bob', { type: 'roll' }, () => 5 / 6); // 6
+
+    const result = room.takeResult();
+    expect(result).toMatchObject({ gameId: 'dice-high', stake: 50, winnerId: 'bob' });
+    expect(result?.players).toEqual([
+      { playerId: 'bob', seat: 1, place: 1 },
+      { playerId: 'alice', seat: 0, place: 2 },
+      { playerId: 'carol', seat: 2, place: 3 },
+    ]);
+    expect(room.takeResult()).toBeNull();
   });
 });

@@ -14,17 +14,19 @@ import {
 import type { FastifyBaseLogger } from 'fastify';
 import type { Server } from 'socket.io';
 import { ZodError } from 'zod';
-import { RoomError } from '../errors.js';
+import { AppError } from '../errors.js';
 import type { Room } from '../rooms/room.js';
 import type { RoomManager } from '../rooms/room-manager.js';
-import type { SessionStore } from './sessions.js';
+import type { PlayerService } from '../players/player-service.js';
+import type { StatsService } from '../stats/stats-service.js';
 
 export type GameServer = Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
 export interface HandlerDeps {
   io: GameServer;
   rooms: RoomManager;
-  sessions: SessionStore;
+  players: PlayerService;
+  stats: StatsService;
   rng: Rng;
   disconnectGraceMs: number;
   log: FastifyBaseLogger;
@@ -37,7 +39,7 @@ const roomChannel = (code: string) => `room:${code}`;
 
 /** Превратить любое исключение в ответ клиенту. Неожиданные ошибки — в лог, наружу — общий текст. */
 function toErrorResult(err: unknown, log: FastifyBaseLogger) {
-  if (err instanceof RoomError || err instanceof GameRuleError) {
+  if (err instanceof AppError || err instanceof GameRuleError) {
     return { ok: false as const, error: { code: err.code, message: err.message } };
   }
   if (err instanceof ZodError) {
@@ -49,7 +51,7 @@ function toErrorResult(err: unknown, log: FastifyBaseLogger) {
 
 /** Подключает обработчики событий. Возвращает функцию очистки таймеров (для остановки сервера). */
 export function registerSocketHandlers(deps: HandlerDeps): () => void {
-  const { io, rooms, sessions, rng, log } = deps;
+  const { io, rooms, players, stats, rng, log } = deps;
   const leaveTimers = new Map<string, NodeJS.Timeout>();
 
   /**
@@ -61,6 +63,21 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     for (const id of room.players.keys()) {
       io.to(playerChannel(id)).emit('room:state', room.toView(id));
     }
+
+    // Партия только что закончилась — сохраняем её в базу.
+    const result = room.takeResult();
+    if (result) {
+      // Игру не задерживаем ожиданием базы: итог уже у игроков, рейтинг придёт следом.
+      stats
+        .recordMatch(result)
+        .then((record) => io.to(roomChannel(room.code)).emit('match:recorded', record))
+        .catch((err: unknown) => log.error({ err, room: room.code }, 'failed to record match'));
+    }
+  };
+
+  /** Имя из формы входа сохраняем в профиль, чтобы оно было в таблице лидеров. */
+  const saveName = (playerId: string, name: string) => {
+    players.rename(playerId, name).catch((err: unknown) => log.error({ err }, 'failed to save name'));
   };
 
   /**
@@ -68,23 +85,28 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
    * Благодаря ей обработчики ниже — это 2–3 строки чистой логики.
    */
   const handle =
-    <T>(fn: (args: unknown[]) => T) =>
-    (...args: unknown[]) => {
+    <T>(fn: (args: unknown[]) => T | Promise<T>) =>
+    async (...args: unknown[]) => {
       const ack = args.at(-1);
       if (typeof ack !== 'function') return; // клиент без ack — игнорируем
       try {
-        (ack as Ack<T>)({ ok: true, data: fn(args) });
+        (ack as Ack<T>)({ ok: true, data: await fn(args) });
       } catch (err) {
         (ack as Ack<T>)(toErrorResult(err, log));
       }
     };
 
   // Middleware: выполняется до 'connection'. Здесь определяем, кто подключился.
-  io.use((socket, next) => {
-    const session = sessions.resolve(socket.handshake.auth?.token);
-    socket.data.playerId = session.playerId;
-    socket.data.token = session.token;
-    next();
+  io.use(async (socket, next) => {
+    try {
+      const session = await players.resolveSession(socket.handshake.auth?.token);
+      socket.data.playerId = session.playerId;
+      socket.data.token = session.token;
+      next();
+    } catch (err) {
+      log.error({ err }, 'session error');
+      next(new Error('SESSION_UNAVAILABLE'));
+    }
   });
 
   io.on('connection', (socket) => {
@@ -114,11 +136,13 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
 
     socket.on(
       'room:create',
-      handle(([input]) => {
+      handle(async ([input]) => {
         const { name, color, settings } = createRoomSchema.parse(input);
+        const dice = await players.diceStyle(playerId);
         const previous = rooms.roomOf(playerId);
         if (previous) exitRoom(previous.code, playerId);
-        const room = rooms.create({ id: playerId, name, color }, settings);
+        const room = rooms.create({ id: playerId, name, color, dice }, settings);
+        saveName(playerId, name);
         broadcast(previous);
         return enterRoom(room);
       }),
@@ -126,10 +150,12 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
 
     socket.on(
       'room:join',
-      handle(([input]) => {
+      handle(async ([input]) => {
         const { code, name, password, color } = joinRoomSchema.parse(input);
+        const dice = await players.diceStyle(playerId);
         const previous = rooms.roomOf(playerId);
-        const room = rooms.join({ id: playerId, name, color }, code, password);
+        const room = rooms.join({ id: playerId, name, color, dice }, code, password);
+        saveName(playerId, name);
         if (previous && previous !== room) {
           exitRoom(previous.code, playerId);
           broadcast(previous);
@@ -229,6 +255,6 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
 
 function requireRoom(rooms: RoomManager, playerId: string): Room {
   const room = rooms.roomOf(playerId);
-  if (!room) throw new RoomError('NOT_IN_ROOM', 'Вы не в комнате');
+  if (!room) throw new AppError('NOT_IN_ROOM', 'Вы не в комнате');
   return room;
 }
