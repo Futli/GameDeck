@@ -20,6 +20,8 @@ services:
       - app
 
   app:
+    # Готовый образ из GHCR (его собирает GitHub Actions); --build соберёт локально из исходников.
+    image: ${APP_IMAGE:-ghcr.io/futli/gamedeck:latest}
     build:
       context: ..
     restart: unless-stopped
