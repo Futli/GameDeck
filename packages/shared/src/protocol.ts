@@ -60,6 +60,14 @@ export interface ServerToClientEvents {
   session: (session: SessionInfo) => void;
   'room:state': (room: RoomView) => void;
   'room:kicked': (info: { code: string }) => void;
+  /** Партия сохранена в базе: места и изменение рейтинга у каждого. */
+  'match:recorded': (result: MatchRecord) => void;
+}
+
+export interface MatchRecord {
+  matchId: string;
+  gameId: string;
+  players: Array<{ playerId: string; place: number; ratingBefore: number; ratingAfter: number }>;
 }
 
 /** Данные, которые Socket.IO хранит на каждом сокете (socket.data). */

@@ -78,4 +78,25 @@ describe('RoomManager', () => {
     room.startGame('alice');
     expect(room.status).toBe('playing');
   });
+
+  it('после партии комната один раз отдаёт итог с местами; ушедший — последний', () => {
+    const rooms = new RoomManager();
+    const room = rooms.create(alice, { stake: 50 });
+    rooms.join(bob, room.code);
+    rooms.join(carol, room.code);
+    room.startGame('alice');
+
+    room.move('alice', { type: 'roll' }, () => 0); // 1
+    rooms.leave('carol'); // ушла посреди партии
+    room.move('bob', { type: 'roll' }, () => 5 / 6); // 6
+
+    const result = room.takeResult();
+    expect(result).toMatchObject({ gameId: 'dice-high', stake: 50, winnerId: 'bob' });
+    expect(result?.players).toEqual([
+      { playerId: 'bob', seat: 1, place: 1 },
+      { playerId: 'alice', seat: 0, place: 2 },
+      { playerId: 'carol', seat: 2, place: 3 },
+    ]);
+    expect(room.takeResult()).toBeNull();
+  });
 });

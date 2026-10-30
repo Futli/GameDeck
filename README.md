@@ -32,7 +32,7 @@
 | Общий код | Пакет `shared`: типы событий, схемы zod, игровая логика |
 | Тесты | Vitest |
 | Монорепо | pnpm workspaces |
-| Хранение | Состояние в памяти процесса (БД появится вместе с рейтингом) |
+| Хранение | Комнаты в памяти; игроки, рейтинг, партии, монеты и предметы в PostgreSQL (Drizzle ORM; без установки Postgres работает встроенный PGlite) |
 
 ## Архитектура
 
@@ -46,7 +46,7 @@ gamedeck/
 └── pnpm-workspace.yaml
 ```
 
-Подробный разбор сервера по шагам: [docs/server-guide.md](docs/server-guide.md).
+Подробный разбор по шагам: [сервер](docs/server-guide.md), [база данных](docs/database-guide.md).
 
 Ключевые решения:
 
@@ -108,6 +108,8 @@ tailscale ip -4          # например, 100.64.0.10
 | `HOST` | `0.0.0.0` | Адрес, на котором слушает сервер |
 | `PORT` | `3000` | Порт HTTP и WebSocket |
 | `DISCONNECT_GRACE_MS` | `60000` | Сколько ждать отключившегося игрока, прежде чем убрать его из комнаты |
+| `DATABASE_URL` | `./data/pglite` | `postgres://...` для PostgreSQL или путь к папке встроенного PGlite |
+| `STARTING_COINS` | `500` | Монеты, которые получает новый игрок |
 | `LOG_LEVEL` | `info` | Уровень логов Fastify (`debug`, `info`, `warn`, `error`) |
 
 ## Скрипты
@@ -118,6 +120,8 @@ tailscale ip -4          # например, 100.64.0.10
 | `pnpm build` | Сборка всех пакетов |
 | `pnpm start` | Запуск собранного сервера |
 | `pnpm test` | Тесты (Vitest) |
+| `pnpm db:generate` | Создать SQL-миграцию после правки `schema.ts` |
+| `pnpm db:studio` | Drizzle Studio: посмотреть таблицы в браузере |
 | `pnpm typecheck` | Проверка типов во всех пакетах |
 
 ## Лицензия

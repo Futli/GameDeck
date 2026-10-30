@@ -8,7 +8,7 @@ import {
   type RoomView,
   type Rng,
 } from '@gamedeck/shared';
-import { RoomError } from '../errors.js';
+import { AppError } from '../errors.js';
 
 interface Player {
   id: string;
@@ -20,6 +20,22 @@ interface Player {
 interface ActiveGame {
   module: GameModule<unknown, unknown>;
   state: unknown;
+  startedAt: Date;
+  /** Места игроков на момент старта — для записи в историю. */
+  seats: Map<string, number>;
+  /** Кто ушёл посреди партии: они получают последнее место. */
+  leavers: string[];
+}
+
+/** Итог партии для записи в базу. Комната отдаёт его один раз. */
+export interface MatchResult {
+  gameId: string;
+  roomCode: string;
+  stake: number;
+  winnerId: string | null;
+  startedAt: Date;
+  finishedAt: Date;
+  players: Array<{ playerId: string; seat: number; place: number }>;
 }
 
 export const defaultSettings: RoomSettings = {
@@ -40,6 +56,7 @@ export class Room {
   settings: RoomSettings;
   status: RoomStatus = 'lobby';
   private game: ActiveGame | null = null;
+  private pendingResult: MatchResult | null = null;
 
   constructor(
     readonly code: string,
@@ -57,12 +74,12 @@ export class Room {
 
   addPlayer(id: string, name: string, password?: string): void {
     if (this.players.has(id)) return; // повторный вход — не ошибка
-    if (this.status === 'playing') throw new RoomError('GAME_IN_PROGRESS', 'Игра уже идёт');
+    if (this.status === 'playing') throw new AppError('GAME_IN_PROGRESS', 'Игра уже идёт');
     if (this.settings.password && this.settings.password !== password) {
-      throw new RoomError('WRONG_PASSWORD', 'Неверный пароль');
+      throw new AppError('WRONG_PASSWORD', 'Неверный пароль');
     }
     if (this.players.size >= this.settings.maxPlayers) {
-      throw new RoomError('ROOM_FULL', 'Комната заполнена');
+      throw new AppError('ROOM_FULL', 'Комната заполнена');
     }
     this.players.set(id, { id, name, seat: this.freeSeat(), connected: true });
   }
@@ -72,6 +89,7 @@ export class Room {
     if (!this.players.delete(id)) return;
 
     if (this.game && this.status === 'playing') {
+      this.game.leavers.push(id);
       this.game.state = this.game.module.removePlayer(this.game.state, id);
       this.syncStatus();
     }
@@ -89,42 +107,50 @@ export class Room {
 
   updateSettings(byId: string, patch: Partial<RoomSettings>): void {
     this.assertHost(byId);
-    if (this.status === 'playing') throw new RoomError('GAME_IN_PROGRESS', 'Нельзя менять настройки во время игры');
+    if (this.status === 'playing') throw new AppError('GAME_IN_PROGRESS', 'Нельзя менять настройки во время игры');
     const next = { ...this.settings, ...patch };
     if ('password' in patch) next.password = patch.password || null;
     if (next.maxPlayers < this.players.size) {
-      throw new RoomError('TOO_MANY_PLAYERS', 'В комнате уже больше игроков, чем новый лимит');
+      throw new AppError('TOO_MANY_PLAYERS', 'В комнате уже больше игроков, чем новый лимит');
     }
     this.settings = next;
   }
 
   kick(byId: string, targetId: string): void {
     this.assertHost(byId);
-    if (byId === targetId) throw new RoomError('BAD_TARGET', 'Нельзя исключить себя');
-    if (!this.players.has(targetId)) throw new RoomError('NOT_FOUND', 'Игрок не найден');
+    if (byId === targetId) throw new AppError('BAD_TARGET', 'Нельзя исключить себя');
+    if (!this.players.has(targetId)) throw new AppError('NOT_FOUND', 'Игрок не найден');
     this.removePlayer(targetId);
   }
 
   startGame(byId: string): void {
     this.assertHost(byId);
-    if (this.status === 'playing') throw new RoomError('GAME_IN_PROGRESS', 'Игра уже идёт');
+    if (this.status === 'playing') throw new AppError('GAME_IN_PROGRESS', 'Игра уже идёт');
     const module = games[this.settings.gameId];
-    if (!module) throw new RoomError('UNKNOWN_GAME', 'Неизвестная игра');
+    if (!module) throw new AppError('UNKNOWN_GAME', 'Неизвестная игра');
     if (this.players.size < module.minPlayers) {
-      throw new RoomError('NOT_ENOUGH_PLAYERS', `Нужно минимум ${module.minPlayers} игрока`);
+      throw new AppError('NOT_ENOUGH_PLAYERS', `Нужно минимум ${module.minPlayers} игрока`);
     }
     // Порядок ходов — по местам за столом, по часовой стрелке.
     const order = [...this.players.values()].sort((a, b) => a.seat - b.seat).map((p) => p.id);
-    this.game = { module, state: module.start(order) };
+    const players = [...this.players.values()];
+    this.game = {
+      module,
+      state: module.start(order),
+      startedAt: new Date(),
+      seats: new Map(players.map((p) => [p.id, p.seat])),
+      leavers: [],
+    };
+    this.pendingResult = null;
     this.status = 'playing';
   }
 
   move(byId: string, move: unknown, rng: Rng): void {
-    if (!this.game || this.status !== 'playing') throw new RoomError('NO_GAME', 'Игра не идёт');
+    if (!this.game || this.status !== 'playing') throw new AppError('NO_GAME', 'Игра не идёт');
     try {
       this.game.state = this.game.module.applyMove(this.game.state, byId, move, rng);
     } catch (err) {
-      if (err instanceof GameRuleError) throw new RoomError(err.code, err.message);
+      if (err instanceof GameRuleError) throw new AppError(err.code, err.message);
       throw err;
     }
     this.syncStatus();
@@ -149,17 +175,55 @@ export class Room {
     };
   }
 
+  /** Забрать итог только что закончившейся партии (или null). Второй вызов вернёт null. */
+  takeResult(): MatchResult | null {
+    const result = this.pendingResult;
+    this.pendingResult = null;
+    return result;
+  }
+
   private syncStatus(): void {
-    if (this.game && this.game.module.winner(this.game.state) !== null) this.status = 'finished';
+    const game = this.game;
+    if (!game || this.status !== 'playing') return;
+    const winnerId = game.module.winner(game.state);
+    if (winnerId === null) return;
+
+    this.status = 'finished';
+    // Места: по правилам игры, затем все, кого правила не расставили, затем ушедшие.
+    const leavers = new Set(game.leavers);
+    const groups = game.module
+      .standings(game.state)
+      .map((group) => group.filter((id) => !leavers.has(id)))
+      .filter((group) => group.length > 0);
+    const placed = new Set(groups.flat());
+    const rest = [...game.seats.keys()].filter((id) => !placed.has(id) && !leavers.has(id));
+    if (rest.length > 0) groups.push(rest);
+    if (leavers.size > 0) groups.push([...leavers]);
+
+    const players: MatchResult['players'] = [];
+    let place = 1;
+    for (const group of groups) {
+      for (const playerId of group) players.push({ playerId, seat: game.seats.get(playerId)!, place });
+      place += group.length; // «спортивная» нумерация: 1, 2, 2, 4
+    }
+    this.pendingResult = {
+      gameId: game.module.id,
+      roomCode: this.code,
+      stake: this.settings.stake,
+      winnerId,
+      startedAt: game.startedAt,
+      finishedAt: new Date(),
+      players,
+    };
   }
 
   private assertHost(id: string): void {
-    if (id !== this.hostId) throw new RoomError('NOT_HOST', 'Это может сделать только хост');
+    if (id !== this.hostId) throw new AppError('NOT_HOST', 'Это может сделать только хост');
   }
 
   private freeSeat(): number {
     const taken = new Set([...this.players.values()].map((p) => p.seat));
     for (let seat = 0; seat < MAX_PLAYERS; seat++) if (!taken.has(seat)) return seat;
-    throw new RoomError('ROOM_FULL', 'Комната заполнена');
+    throw new AppError('ROOM_FULL', 'Комната заполнена');
   }
 }

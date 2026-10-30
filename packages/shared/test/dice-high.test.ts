@@ -75,3 +75,16 @@ describe('dice-high', () => {
     expect(diceHigh.winner(s)).toBe('b');
   });
 });
+
+describe('dice-high standings', () => {
+  it('места: победитель, затем проигравший переброс, затем выбывшие в первом раунде по значению', () => {
+    // Раунд 1: a=5, b=2, c=5, d=4. Раунд 2: a=3, c=6.
+    const s = playAll(diceHigh.start(['a', 'b', 'c', 'd']), dice(5, 2, 5, 4, 3, 6));
+    expect(diceHigh.standings(s)).toEqual([['c'], ['a'], ['d'], ['b']]);
+  });
+
+  it('одинаковые значения делят место', () => {
+    const s = playAll(diceHigh.start(['a', 'b', 'c']), dice(6, 2, 2));
+    expect(diceHigh.standings(s)).toEqual([['a'], ['b', 'c']]);
+  });
+});

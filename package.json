@@ -11,7 +11,9 @@
     "build": "pnpm -r build",
     "start": "pnpm --filter @gamedeck/server start",
     "test": "vitest run",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @gamedeck/server db:generate",
+    "db:studio": "pnpm --filter @gamedeck/server db:studio"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

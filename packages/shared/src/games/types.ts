@@ -32,4 +32,9 @@ export interface GameModule<State, Move> {
   removePlayer(state: State, playerId: string): State;
   /** Победитель, или null, пока игра идёт. */
   winner(state: State): string | null;
+  /**
+   * Итоговые места: группы игроков от лучшего к худшему, внутри группы — делят место.
+   * Нужны для рейтинга. Вызывается только после победы.
+   */
+  standings(state: State): string[][];
 }
