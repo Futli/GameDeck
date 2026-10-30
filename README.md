@@ -104,6 +104,17 @@ tailscale ip -4          # например, 100.64.0.10
 
 Так можно играть с телефона или с другого компьютера без публикации сервера в интернет.
 
+### Деплой на сервер (HTTPS, Telegram Mini App)
+
+`Dockerfile` и `deploy/` (Caddy + PostgreSQL) поднимают GameDeck на любом VPS с автоматическим HTTPS:
+
+```bash
+cd deploy && cp .env.example .env   # DOMAIN и POSTGRES_PASSWORD
+docker compose up -d --build
+```
+
+Подробно: [docs/deploy-guide.md](docs/deploy-guide.md).
+
 ### Переменные окружения
 
 | Переменная | По умолчанию | Описание |
