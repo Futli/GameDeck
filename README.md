@@ -46,7 +46,7 @@ gamedeck/
 └── pnpm-workspace.yaml
 ```
 
-Подробный разбор по шагам: [сервер](docs/server-guide.md), [база данных](docs/database-guide.md).
+Подробный разбор по шагам: [сервер](docs/server-guide.md), [база данных](docs/database-guide.md), [клиент](docs/client-guide.md).
 
 Ключевые решения:
 
@@ -76,7 +76,7 @@ pnpm install
 pnpm dev
 ```
 
-Поднимает сервер с перезапуском при изменениях (клиент появится следующим шагом):
+Поднимает сервер и клиент с перезапуском при изменениях:
 
 - клиент (Vite): http://localhost:5173
 - API и WebSocket: http://localhost:3000 (Vite проксирует запросы к нему)

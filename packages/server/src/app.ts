@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import type { Rng } from '@gamedeck/shared';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 import { Server } from 'socket.io';
+import { registerClient } from './http/client.js';
 import { registerHttpRoutes } from './http/routes.js';
 import type { Db } from './db/client.js';
 import { PlayerService } from './players/player-service.js';
@@ -16,6 +17,8 @@ export const cryptoRng: Rng = () => randomInt(0, 2 ** 32) / 2 ** 32;
 export interface AppOptions {
   db: Db;
   startingCoins?: number;
+  /** Отдавать собранный клиент (packages/client/dist). В тестах не нужно. */
+  serveClient?: boolean;
   logger?: FastifyServerOptions['logger'];
   rng?: Rng;
   disconnectGraceMs?: number;
@@ -51,6 +54,7 @@ export async function buildApp(options: AppOptions) {
     log: app.log,
   });
   registerHttpRoutes(app, { rooms, players, stats, shop });
+  if (options.serveClient) await registerClient(app);
 
   // Перед остановкой HTTP закрываем все сокеты, иначе server.close() будет ждать их вечно.
   app.addHook('preClose', async () => {

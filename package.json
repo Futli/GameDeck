@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @gamedeck/server dev",
+    "dev": "pnpm --parallel --filter @gamedeck/server --filter @gamedeck/client dev",
     "build": "pnpm -r build",
     "start": "pnpm --filter @gamedeck/server start",
     "test": "vitest run",

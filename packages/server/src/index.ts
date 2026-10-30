@@ -7,6 +7,7 @@ const database = await openDatabase(config.databaseUrl);
 const { app } = await buildApp({
   db: database.db,
   startingCoins: config.startingCoins,
+  serveClient: true,
   logger: { level: config.logLevel },
   disconnectGraceMs: config.disconnectGraceMs,
 });
