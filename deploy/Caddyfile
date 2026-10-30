@@ -1,0 +1,6 @@
+# Caddy сам получает и продлевает сертификат Let's Encrypt для домена
+# и проксирует всё (страницу, /api, /socket.io с WebSocket) в Node.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000
+}
