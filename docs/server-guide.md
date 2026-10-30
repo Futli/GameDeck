@@ -98,11 +98,13 @@ export type JoinRoomInput = z.input<typeof joinRoomSchema>;
 
 ```ts
 interface GameModule<State, Move> {
-  start(playerIds): State;
+  moveSchema: z.ZodType<Move>;                    // какие ходы бывают в этой игре
+  start(playerIds, rng): State;
   currentPlayer(state): string | null;
   applyMove(state, playerId, move, rng): State;  // ошибка, если ход недопустим
   removePlayer(state, playerId): State;
   winner(state): string | null;
+  viewFor?(state, viewerId): unknown;             // что можно показать этому игроку
 }
 ```
 
@@ -217,6 +219,45 @@ curl http://localhost:3000/api/health
 ```
 
 С телефона в Tailscale: `http://<tailscale ip TRASHCAN>:3000/api/health`.
+
+## Шаг 10. Вторая игра: перудо (`shared/src/games/perudo.ts`)
+
+Перудо проверило архитектуру на прочность: в нём есть **скрытая информация**. У каждого 5 кубиков под стаканом, свои видишь, чужие нет. Ставки делаются на все кубики стола («минимум четыре пятёрки»), следующий либо повышает, либо говорит «Не верю!» (`dudo`), либо «Точно!» (`calza`). Единицы — джокеры. Подробные правила в комментарии в начале файла.
+
+Чтобы добавить игру, понадобилось три небольших расширения общего интерфейса. Все они пригодятся и следующим играм.
+
+**1. `viewFor(state, viewerId)` — секреты не уходят по сети.** Полное состояние (`PerudoState.dice` со всеми кубиками) живёт только на сервере. Перед отправкой комната спрашивает у модуля игры, что можно показать конкретному игроку:
+
+```ts
+// perudo.ts
+viewFor(state, viewerId) {
+  const { dice, ...rest } = state;
+  const hands = {};
+  for (const id of state.order) {
+    hands[id] = { count: dice[id].length, dice: id === viewerId ? dice[id] : null };
+  }
+  return { ...rest, hands, totalDice: ... };
+}
+```
+
+Почему не «отправить всё, а клиент просто не нарисует»? Потому что любой игрок откроет DevTools и увидит чужие кубики в WebSocket-кадре. Правило: на клиент уходит только то, что игрок имеет право знать.
+
+Отсюда следующее изменение в `handlers.ts`: `broadcast` больше не шлёт одно сообщение в канал комнаты, а каждому игроку его версию — `room.toView(playerId)`. Игре без секретов (`dice-high`) `viewFor` не нужен, её состояние уходит как есть.
+
+**2. `moveSchema` — у каждой игры свои ходы.** В «Броске» ход один (`{type:'roll'}`), в перудо три (`bid`, `dudo`, `calza`). Поэтому схема хода переехала из общего `schemas.ts` в модуль игры, а `Room.move` проверяет ход схемой той игры, что сейчас идёт. Кривой ход по-прежнему возвращается клиенту как `BAD_REQUEST`.
+
+**3. `start(playerIds, rng)` — стартовый бросок.** В перудо кубики бросаются сразу при старте, поэтому `start` получил `rng`, как и `applyMove`.
+
+**Цвет игрока.** У каждого в `PlayerView` есть `color` (`red`, `blue`, `green`, `yellow`, `purple`, `orange`): им клиент красит стакан, кубики и коврик игрока. Цвет можно попросить при создании и входе (`color` в `room:create` / `room:join`), а если он занят, сервер выдаст первый свободный. Сменить цвет — событие `room:color`. Цвета хранятся как id, а оттенки для отрисовки лежат в `PLAYER_COLOR_HEX`: когда появятся скины стаканов из БД, их можно будет привязать к тем же id.
+
+Пример хода в перудо с клиента:
+
+```ts
+await socket.emitWithAck('game:move', { type: 'bid', quantity: 4, face: 5 }); // «четыре пятёрки»
+await socket.emitWithAck('game:move', { type: 'dudo' });                    // «не верю!»
+```
+
+После `dudo`/`calza` в `state.lastReveal` приходят открытые стаканы всех игроков за прошлый раунд: кто сколько выбросил, сколько нашлось, кто потерял кубик. Клиенту этого хватает, чтобы проиграть анимацию открытия стаканов.
 
 ## Что дальше
 

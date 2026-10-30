@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { PerudoView } from '@gamedeck/shared';
 import { RoomManager } from '../src/rooms/room-manager.js';
 
 const alice = { id: 'alice', name: 'Алиса' };
@@ -11,7 +12,7 @@ describe('RoomManager', () => {
     const room = rooms.create(alice);
     expect(room.code).toMatch(/^[A-Z2-9]{5}$/);
     expect(room.toView().players).toEqual([
-      { id: 'alice', name: 'Алиса', seat: 0, isHost: true, connected: true },
+      { id: 'alice', name: 'Алиса', seat: 0, color: 'red', isHost: true, connected: true },
     ]);
   });
 
@@ -51,7 +52,7 @@ describe('RoomManager', () => {
     rooms.join(bob, room.code);
     expect(() => room.updateSettings('bob', { stake: 10 })).toThrow('только хост');
     expect(() => rooms.kick('bob', 'alice')).toThrow('только хост');
-    expect(() => room.startGame('bob')).toThrow('только хост');
+    expect(() => room.startGame('bob', Math.random)).toThrow('только хост');
 
     rooms.kick('alice', 'bob');
     expect(rooms.roomOf('bob')).toBeUndefined();
@@ -64,7 +65,7 @@ describe('RoomManager', () => {
     rooms.join(bob, room.code);
     expect(() => rooms.join(carol, 'XXXXX')).toThrow('не найдена');
 
-    room.startGame('alice');
+    room.startGame('alice', Math.random);
     expect(room.status).toBe('playing');
     expect(() => rooms.join(carol, room.code)).toThrow('Игра уже идёт');
 
@@ -75,7 +76,43 @@ describe('RoomManager', () => {
     expect(room.status).toBe('finished');
     expect(room.toView().game?.winnerId).toBe('bob');
 
-    room.startGame('alice');
+    room.startGame('alice', Math.random);
     expect(room.status).toBe('playing');
+  });
+
+  it('у каждого свой цвет: желаемый, если свободен, иначе первый свободный', () => {
+    const rooms = new RoomManager();
+    const room = rooms.create({ ...alice, color: 'green' });
+    rooms.join({ ...bob, color: 'green' }, room.code);
+    rooms.join(carol, room.code);
+    expect(room.toView().players.map((p) => [p.id, p.color])).toEqual([
+      ['alice', 'green'],
+      ['bob', 'red'],
+      ['carol', 'blue'],
+    ]);
+
+    expect(() => room.setColor('bob', 'green')).toThrow('занят');
+    room.setColor('bob', 'purple');
+    rooms.leave('alice');
+    room.setColor('carol', 'green'); // цвет ушедшего освободился
+    expect(room.players.get('carol')?.color).toBe('green');
+  });
+
+  it('перудо: каждый видит только свои кубики, ход проверяется схемой игры', () => {
+    const rooms = new RoomManager();
+    const room = rooms.create(alice, { gameId: 'perudo' });
+    rooms.join(bob, room.code);
+    room.startGame('alice', Math.random);
+
+    const forAlice = room.toView('alice').game?.state as PerudoView;
+    const forBob = room.toView('bob').game?.state as PerudoView;
+    expect(forAlice.hands.alice?.dice).toHaveLength(5);
+    expect(forAlice.hands.bob).toEqual({ count: 5, dice: null });
+    expect(forBob.hands.alice?.dice).toBeNull();
+    expect(forBob.hands.bob?.dice).toHaveLength(5);
+
+    expect(() => room.move('alice', { type: 'roll' }, Math.random)).toThrow();
+    room.move('alice', { type: 'bid', quantity: 2, face: 3 }, Math.random);
+    expect(room.toView().game?.currentPlayerId).toBe('bob');
   });
 });
