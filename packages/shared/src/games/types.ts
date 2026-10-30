@@ -1,3 +1,5 @@
+import type { z } from 'zod';
+
 /** Источник случайности. В проде — crypto, в тестах — заранее заданная последовательность. */
 export type Rng = () => number;
 
@@ -22,8 +24,10 @@ export interface GameModule<State, Move> {
   readonly title: string;
   readonly minPlayers: number;
   readonly maxPlayers: number;
-  /** Начальное состояние. Порядок playerIds — порядок ходов. */
-  start(playerIds: readonly string[]): State;
+  /** zod-схема хода: сервер проверяет ход клиента именно этой игры до applyMove. */
+  readonly moveSchema: z.ZodType<Move>;
+  /** Начальное состояние. Порядок playerIds — порядок ходов. rng — для стартового броска. */
+  start(playerIds: readonly string[], rng: Rng): State;
   /** Чей сейчас ход, или null, если игра окончена. */
   currentPlayer(state: State): string | null;
   /** Применить ход. Бросает GameRuleError, если ход недопустим. */
@@ -37,4 +41,11 @@ export interface GameModule<State, Move> {
    * Нужны для рейтинга. Вызывается только после победы.
    */
   standings(state: State): string[][];
+  /**
+   * Что из состояния можно показать конкретному игроку. Нужно играм со
+   * скрытой информацией (кубики под стаканом в перудо): чужие секреты не
+   * должны уйти по сети даже в виде JSON, который клиент «просто не рисует».
+   * Если не задано — состояние публичное и уходит всем как есть.
+   */
+  viewFor?(state: State, viewerId: string | null): unknown;
 }

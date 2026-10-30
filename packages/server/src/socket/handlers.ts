@@ -1,9 +1,9 @@
 import {
   GameRuleError,
+  colorSchema,
   createRoomSchema,
   joinRoomSchema,
   kickSchema,
-  moveSchema,
   updateSettingsSchema,
   type Ack,
   type ClientToServerEvents,
@@ -54,18 +54,23 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
   const { io, rooms, players, stats, rng, log } = deps;
   const leaveTimers = new Map<string, NodeJS.Timeout>();
 
-  /** Разослать состояние комнаты. Если партия только что закончилась — сохранить её в базу. */
+  /**
+   * Разослать состояние комнаты. Не одним сообщением на канал комнаты, а
+   * каждому игроку своё: в перудо у каждого свой набор видимых кубиков.
+   */
   const broadcast = (room: Room | undefined) => {
     if (!room) return;
-    const channel = roomChannel(room.code);
-    io.to(channel).emit('room:state', room.toView());
+    for (const id of room.players.keys()) {
+      io.to(playerChannel(id)).emit('room:state', room.toView(id));
+    }
 
+    // Партия только что закончилась — сохраняем её в базу.
     const result = room.takeResult();
     if (result) {
       // Игру не задерживаем ожиданием базы: итог уже у игроков, рейтинг придёт следом.
       stats
         .recordMatch(result)
-        .then((record) => io.to(channel).emit('match:recorded', record))
+        .then((record) => io.to(roomChannel(room.code)).emit('match:recorded', record))
         .catch((err: unknown) => log.error({ err, room: room.code }, 'failed to record match'));
     }
   };
@@ -122,7 +127,7 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     const enterRoom = (room: Room) => {
       io.in(playerChannel(playerId)).socketsJoin(roomChannel(room.code));
       broadcast(room);
-      return room.toView();
+      return room.toView(playerId);
     };
 
     const exitRoom = (code: string, targetId: string) => {
@@ -132,10 +137,10 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     socket.on(
       'room:create',
       handle(([input]) => {
-        const { name, settings } = createRoomSchema.parse(input);
+        const { name, color, settings } = createRoomSchema.parse(input);
         const previous = rooms.roomOf(playerId);
         if (previous) exitRoom(previous.code, playerId);
-        const room = rooms.create({ id: playerId, name }, settings);
+        const room = rooms.create({ id: playerId, name, color }, settings);
         saveName(playerId, name);
         broadcast(previous);
         return enterRoom(room);
@@ -145,9 +150,9 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     socket.on(
       'room:join',
       handle(([input]) => {
-        const { code, name, password } = joinRoomSchema.parse(input);
+        const { code, name, password, color } = joinRoomSchema.parse(input);
         const previous = rooms.roomOf(playerId);
-        const room = rooms.join({ id: playerId, name }, code, password);
+        const room = rooms.join({ id: playerId, name, color }, code, password);
         saveName(playerId, name);
         if (previous && previous !== room) {
           exitRoom(previous.code, playerId);
@@ -173,7 +178,7 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
         const room = requireRoom(rooms, playerId);
         room.updateSettings(playerId, updateSettingsSchema.parse(input));
         broadcast(room);
-        return room.toView();
+        return room.toView(playerId);
       }),
     );
 
@@ -185,7 +190,18 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
         exitRoom(room.code, targetId);
         io.to(playerChannel(targetId)).emit('room:kicked', { code: room.code });
         broadcast(room);
-        return room.toView();
+        return room.toView(playerId);
+      }),
+    );
+
+    socket.on(
+      'room:color',
+      handle(([input]) => {
+        const { color } = colorSchema.parse(input);
+        const room = requireRoom(rooms, playerId);
+        room.setColor(playerId, color);
+        broadcast(room);
+        return room.toView(playerId);
       }),
     );
 
@@ -193,9 +209,9 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
       'game:start',
       handle(() => {
         const room = requireRoom(rooms, playerId);
-        room.startGame(playerId);
+        room.startGame(playerId, rng);
         broadcast(room);
-        return room.toView();
+        return room.toView(playerId);
       }),
     );
 
@@ -203,9 +219,10 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
       'game:move',
       handle(([input]) => {
         const room = requireRoom(rooms, playerId);
-        room.move(playerId, moveSchema.parse(input), rng);
+        // Схему хода проверяет комната — она знает, какая игра сейчас идёт.
+        room.move(playerId, input, rng);
         broadcast(room);
-        return room.toView();
+        return room.toView(playerId);
       }),
     );
 

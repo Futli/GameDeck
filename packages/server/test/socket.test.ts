@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import type { ClientToServerEvents, MatchRecord, RoomView, ServerToClientEvents, SessionInfo } from '@gamedeck/shared';
+import type { ClientToServerEvents, MatchRecord, PerudoView, RoomView, ServerToClientEvents, SessionInfo } from '@gamedeck/shared';
 import { io as connect, type Socket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
@@ -118,5 +118,32 @@ describe('socket protocol', () => {
 
     await expect.poll(() => states.at(-1)?.players.length, { timeout: 1000 }).toBe(1);
     expect(states[0]?.players.find((p) => p.id === b.session.playerId)?.connected).toBe(false);
+  });
+
+  it('перудо по сети: чужие кубики не уходят на клиент', async () => {
+    const a = await client();
+    const b = await client();
+    const room = await call<RoomView>(a.socket.emitWithAck('room:create', { name: 'Алиса', color: 'blue', settings: { gameId: 'perudo' } }));
+    await call(b.socket.emitWithAck('room:join', { code: room.code, name: 'Боб', color: 'blue' }));
+
+    const bobState = new Promise<RoomView>((resolve) => b.socket.once('room:state', resolve));
+    const forAlice = await call<RoomView>(a.socket.emitWithAck('game:start'));
+    const forBob = await bobState;
+    const aliceId = a.session.playerId;
+    const bobId = b.session.playerId;
+
+    expect(forAlice.players.map((p) => p.color)).toEqual(['blue', 'red']);
+    const aliceHands = (forAlice.game?.state as PerudoView).hands;
+    const bobHands = (forBob.game?.state as PerudoView).hands;
+    expect(aliceHands[aliceId]?.dice).toHaveLength(5);
+    expect(aliceHands[bobId]).toEqual({ count: 5, dice: null });
+    expect(bobHands[aliceId]?.dice).toBeNull();
+    expect(bobHands[bobId]?.dice).toHaveLength(5);
+
+    const badMove = await a.socket.emitWithAck('game:move', { type: 'bid', quantity: 0, face: 9 } as never);
+    expect(badMove).toMatchObject({ ok: false, error: { code: 'BAD_REQUEST' } });
+    await call(a.socket.emitWithAck('game:move', { type: 'bid', quantity: 2, face: 3 }));
+    const view = await call<RoomView>(b.socket.emitWithAck('game:move', { type: 'dudo' }));
+    expect((view.game?.state as PerudoView).lastReveal?.dice[aliceId]).toHaveLength(5);
   });
 });

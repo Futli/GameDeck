@@ -1,4 +1,5 @@
-import { games, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
+import type React from 'react';
+import { PLAYER_COLOR_HEX, games, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
 import { screenPosition, seatsWithPlayers } from '../lib/table';
 import { Die } from './Die';
 
@@ -24,7 +25,8 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
   const me = room.players.find((p) => p.id === myId);
   const mySeat = me?.seat ?? 0;
   const game = room.game;
-  const state = game?.state as DiceHighState | undefined;
+  // Стол пока умеет рисовать «Бросок кубика»; у других игр своё состояние (перудо — следующий шаг).
+  const state = game?.gameId === 'dice-high' ? (game.state as DiceHighState) : undefined;
   const rolls = visibleRolls(state);
   const nameOf = (id: string | null) => room.players.find((p) => p.id === id)?.name ?? '—';
 
@@ -54,7 +56,10 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
               .filter(Boolean)
               .join(' ')}
           >
-            <div className={`mat mat--${seat}`}>
+            <div
+              className="mat"
+              style={{ '--c1': PLAYER_COLOR_HEX[player.color].main, '--c2': PLAYER_COLOR_HEX[player.color].shade } as React.CSSProperties}
+            >
               {rolls[player.id] !== undefined && <Die value={rolls[player.id]!} />}
             </div>
             <div className="seat-name">
@@ -85,6 +90,7 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
             Ждём игроков: {room.players.length}/{room.settings.maxPlayers}
           </div>
         )}
+        {room.status === 'playing' && game && !state && <div className="muted">Интерфейс этой игры ещё в работе</div>}
         {room.status === 'playing' && state && (
           <>
             {state.round > 1 && <div className="round">Переброс, раунд {state.round}</div>}

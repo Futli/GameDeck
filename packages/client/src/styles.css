@@ -139,16 +139,12 @@ input, select {
   display: grid; place-items: center;
   border-radius: 4px;
   image-rendering: pixelated;
+  /* Цвета приходят от сервера: у каждого игрока свой (style на элементе). */
   --c1: #3b6ea8; --c2: #2d5684;
   background:
     repeating-conic-gradient(var(--c1) 0 25%, var(--c2) 0 50%) 0 0 / 16px 16px;
   box-shadow: inset 0 0 0 4px #0004;
 }
-.mat--1 { --c1: #a8503b; --c2: #84402d; }
-.mat--2 { --c1: #6d4aa8; --c2: #563a84; }
-.mat--3 { --c1: #3ba88a; --c2: #2d846c; }
-.mat--4 { --c1: #a8963b; --c2: #84762d; }
-.mat--5 { --c1: #a83b6d; --c2: #842d56; }
 
 .table-center {
   grid-area: mid;

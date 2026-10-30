@@ -1,6 +1,6 @@
 import type { RoomSettings } from '@gamedeck/shared';
 import { AppError } from '../errors.js';
-import { Room } from './room.js';
+import { Room, type PlayerInfo } from './room.js';
 
 // Без 0/O и 1/I, чтобы код было легко продиктовать.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -29,7 +29,7 @@ export class RoomManager {
     return code ? this.rooms.get(code) : undefined;
   }
 
-  create(player: { id: string; name: string }, settings?: Partial<RoomSettings>): Room {
+  create(player: PlayerInfo, settings?: Partial<RoomSettings>): Room {
     this.leave(player.id);
     const room = new Room(this.newCode(), player, settings);
     this.rooms.set(room.code, room);
@@ -37,11 +37,11 @@ export class RoomManager {
     return room;
   }
 
-  join(player: { id: string; name: string }, code: string, password?: string): Room {
+  join(player: PlayerInfo, code: string, password?: string): Room {
     const room = this.get(code);
     if (!room) throw new AppError('ROOM_NOT_FOUND', 'Комната не найдена');
     if (this.roomOfPlayer.get(player.id) !== room.code) this.leave(player.id);
-    room.addPlayer(player.id, player.name, password);
+    room.addPlayer(player, password);
     this.roomOfPlayer.set(player.id, room.code);
     return room;
   }

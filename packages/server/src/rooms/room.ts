@@ -1,8 +1,10 @@
 import {
   GameRuleError,
   MAX_PLAYERS,
+  PLAYER_COLORS,
   games,
   type GameModule,
+  type PlayerColor,
   type RoomSettings,
   type RoomStatus,
   type RoomView,
@@ -14,7 +16,15 @@ interface Player {
   id: string;
   name: string;
   seat: number;
+  color: PlayerColor;
   connected: boolean;
+}
+
+export interface PlayerInfo {
+  id: string;
+  name: string;
+  /** Желаемый цвет; если занят или не задан — первый свободный. */
+  color?: PlayerColor;
 }
 
 interface ActiveGame {
@@ -60,19 +70,19 @@ export class Room {
 
   constructor(
     readonly code: string,
-    host: { id: string; name: string },
+    host: PlayerInfo,
     settings: Partial<RoomSettings> = {},
   ) {
     this.settings = { ...defaultSettings, ...settings, password: settings.password || null };
     this.hostId = host.id;
-    this.players.set(host.id, { id: host.id, name: host.name, seat: 0, connected: true });
+    this.players.set(host.id, { id: host.id, name: host.name, seat: 0, color: this.pickColor(host.color), connected: true });
   }
 
   get isEmpty(): boolean {
     return this.players.size === 0;
   }
 
-  addPlayer(id: string, name: string, password?: string): void {
+  addPlayer({ id, name, color }: PlayerInfo, password?: string): void {
     if (this.players.has(id)) return; // повторный вход — не ошибка
     if (this.status === 'playing') throw new AppError('GAME_IN_PROGRESS', 'Игра уже идёт');
     if (this.settings.password && this.settings.password !== password) {
@@ -81,7 +91,16 @@ export class Room {
     if (this.players.size >= this.settings.maxPlayers) {
       throw new AppError('ROOM_FULL', 'Комната заполнена');
     }
-    this.players.set(id, { id, name, seat: this.freeSeat(), connected: true });
+    this.players.set(id, { id, name, seat: this.freeSeat(), color: this.pickColor(color), connected: true });
+  }
+
+  /** Сменить свой цвет на свободный. Можно и во время игры — это только внешний вид. */
+  setColor(id: string, color: PlayerColor): void {
+    const player = this.players.get(id);
+    if (!player) throw new AppError('NOT_IN_ROOM', 'Вы не в комнате');
+    if (player.color === color) return;
+    if (!this.isColorFree(color)) throw new AppError('COLOR_TAKEN', 'Этот цвет уже занят');
+    player.color = color;
   }
 
   /** Убрать игрока (вышел сам, кикнули или не вернулся после обрыва связи). */
@@ -123,7 +142,7 @@ export class Room {
     this.removePlayer(targetId);
   }
 
-  startGame(byId: string): void {
+  startGame(byId: string, rng: Rng): void {
     this.assertHost(byId);
     if (this.status === 'playing') throw new AppError('GAME_IN_PROGRESS', 'Игра уже идёт');
     const module = games[this.settings.gameId];
@@ -136,7 +155,7 @@ export class Room {
     const players = [...this.players.values()];
     this.game = {
       module,
-      state: module.start(order),
+      state: module.start(order, rng),
       startedAt: new Date(),
       seats: new Map(players.map((p) => [p.id, p.seat])),
       leavers: [],
@@ -148,7 +167,9 @@ export class Room {
   move(byId: string, move: unknown, rng: Rng): void {
     if (!this.game || this.status !== 'playing') throw new AppError('NO_GAME', 'Игра не идёт');
     try {
-      this.game.state = this.game.module.applyMove(this.game.state, byId, move, rng);
+      const { module } = this.game;
+      // Ход проверяется схемой именно текущей игры: у перудо и «броска» разные ходы.
+      this.game.state = module.applyMove(this.game.state, byId, module.moveSchema.parse(move), rng);
     } catch (err) {
       if (err instanceof GameRuleError) throw new AppError(err.code, err.message);
       throw err;
@@ -156,7 +177,12 @@ export class Room {
     this.syncStatus();
   }
 
-  toView(): RoomView {
+  /**
+   * Комната глазами игрока viewerId. Скрытую часть состояния игры (чужие
+   * кубики) отрезает сам модуль игры через viewFor. viewerId = null — взгляд
+   * постороннего: видно только публичное.
+   */
+  toView(viewerId: string | null = null): RoomView {
     const { password, ...settings } = this.settings;
     const game = this.game;
     return {
@@ -168,7 +194,7 @@ export class Room {
         .map((p) => ({ ...p, isHost: p.id === this.hostId })),
       game: game && {
         gameId: game.module.id,
-        state: game.state,
+        state: game.module.viewFor ? game.module.viewFor(game.state, viewerId) : game.state,
         currentPlayerId: game.module.currentPlayer(game.state),
         winnerId: game.module.winner(game.state),
       },
@@ -219,6 +245,17 @@ export class Room {
 
   private assertHost(id: string): void {
     if (id !== this.hostId) throw new AppError('NOT_HOST', 'Это может сделать только хост');
+  }
+
+  private isColorFree(color: PlayerColor): boolean {
+    return ![...this.players.values()].some((p) => p.color === color);
+  }
+
+  private pickColor(wanted?: PlayerColor): PlayerColor {
+    if (wanted && this.isColorFree(wanted)) return wanted;
+    const free = PLAYER_COLORS.find((c) => this.isColorFree(c));
+    if (!free) throw new AppError('ROOM_FULL', 'Комната заполнена');
+    return free;
   }
 
   private freeSeat(): number {
