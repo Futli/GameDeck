@@ -58,9 +58,11 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-$(openssl rand -hex 24)}
 
 # --- 2. Шаблон Debian ---
 msg "Шаблон Debian"
+# Шаблоны бывают и под arm64, берём только под архитектуру хоста.
+ARCH=$(dpkg --print-architecture)
 # Сначала ищем уже скачанный шаблон: так скрипт не ходит в сеть вовсе.
 if [[ -z ${TEMPLATE:-} ]]; then
-  TEMPLATE=$(pveam list "$TEMPLATE_STORAGE" | awk '/debian-1[2-9]-standard/ {sub(/.*\//, "", $1); print $1}' | sort -V | tail -n1)
+  TEMPLATE=$(pveam list "$TEMPLATE_STORAGE" | awk -v arch="$ARCH" '$1 ~ "debian-1[2-9]-standard_.*_" arch "\\.tar" {sub(/.*\//, "", $1); print $1}' | sort -V | tail -n1)
 fi
 if [[ -n $TEMPLATE ]] && pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE"; then
   ok "Уже скачан: $TEMPLATE"
@@ -72,7 +74,7 @@ else
     msg "Пробую $mirror"
     if [[ -z ${TEMPLATE:-} ]]; then
       TEMPLATE=$(curl -fsS --connect-timeout 10 --max-time 30 "$mirror/" 2>/dev/null \
-        | grep -o 'debian-1[2-9]-standard_[^"<>]*_amd64\.tar\.zst' | sort -uV | tail -n1 || true)
+        | grep -o "debian-1[2-9]-standard_[^\"<>]*_${ARCH}\\.tar\\.zst" | sort -uV | tail -n1 || true)
       [[ -n $TEMPLATE ]] || { echo "   список шаблонов не получен"; continue; }
     fi
     dest=$(pvesm path "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE")
