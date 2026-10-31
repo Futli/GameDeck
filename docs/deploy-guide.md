@@ -88,6 +88,30 @@ cd deploy && docker compose up -d --build
 
 Пересобирается только `app`. Комнаты живут в памяти, поэтому идущие партии при обновлении прервутся, а рейтинг, монеты и покупки останутся в базе.
 
+### Автодеплой из GitHub
+
+`.github/workflows/deploy.yml` делает это сам на каждый push в `main`:
+
+1. **test** — `pnpm typecheck` и `pnpm test` (на PR тоже).
+2. **image** — собирает образ и кладёт в GitHub Container Registry: `ghcr.io/futli/gamedeck:latest` и `:<sha коммита>`.
+3. **deploy** — заходит на сервер по SSH, обновляет `/opt/gamedeck`, скачивает новый образ и перезапускает `app`. Сервер ничего не собирает сам, поэтому обновление занимает секунды и не ест его память.
+
+Включается один раз:
+
+```bash
+# на сервере: отдельный ключ только для деплоя
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/gamedeck_deploy
+cat ~/.ssh/gamedeck_deploy.pub >> ~/.ssh/authorized_keys
+cat ~/.ssh/gamedeck_deploy        # приватный ключ, скопировать в GitHub
+```
+
+В репозитории: **Settings → Secrets and variables → Actions**:
+
+- **Variables**: `DEPLOY_HOST` — IP или домен сервера.
+- **Secrets**: `DEPLOY_USER` — пользователь SSH (например `root`), `DEPLOY_SSH_KEY` — приватный ключ целиком.
+
+Пока `DEPLOY_HOST` не задан, шаг deploy пропускается, а образ всё равно собирается. Первый запуск на сервере (шаги 3–4) делается руками: `.env` с паролем базы GitHub не хранит. Откат: Actions → нужный старый запуск → Re-run jobs, или на сервере `APP_IMAGE=ghcr.io/futli/gamedeck:<sha> docker compose up -d --no-build`.
+
 ## Шаг 7. Резервная копия базы
 
 ```bash
