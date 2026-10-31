@@ -1,4 +1,4 @@
-/* Минималистичная тёмная тема. Цвета — переменные, чтобы позже подменить их темой Telegram. */
+/* Минималистичная тёмная тема. Цвета — переменные: в Telegram их подменяет тема пользователя (lib/telegram.ts). */
 :root {
   --bg: #14161a;
   --surface: #1d2026;
@@ -70,6 +70,18 @@ input, select {
 .join { display: flex; flex-direction: column; gap: 10px; }
 .code-input { text-align: center; font-size: 1.6rem; letter-spacing: 0.3em; text-transform: uppercase; }
 
+/* Профиль из Telegram вместо поля «Ваше имя». */
+.me { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface); border-radius: var(--radius); }
+.me .avatar { width: 36px; height: 36px; }
+
+.avatar {
+  display: inline-grid; place-items: center; flex: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  object-fit: cover; vertical-align: middle; margin-right: 4px;
+  background: var(--surface-2); color: var(--muted); font-size: 0.7em; font-weight: 600;
+}
+.me .avatar--letter { font-size: 1rem; }
+
 /* ─── Комната ───────────────────────────────────────────── */
 
 .room { display: flex; flex-direction: column; gap: 16px; }
@@ -104,6 +116,9 @@ input, select {
   gap: 10px 6px;
   padding: 14px 10px;
   min-height: 520px;
+  /* Сукно всегда тёмное, поэтому текст на нём светлый — даже в светлой теме Telegram. */
+  color: #f1f3ef;
+  --muted: #b8c4bc;
   /* Сукно: насыщенный зелёный с затемнением к краям и деревянный бортик. */
   background:
     radial-gradient(ellipse at 50% 45%, #1b9a5c 0%, #12764a 45%, #0a4a2e 100%);

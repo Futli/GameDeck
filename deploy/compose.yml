@@ -29,6 +29,9 @@ services:
       DATABASE_URL: postgres://gamedeck:${POSTGRES_PASSWORD:?укажите POSTGRES_PASSWORD в .env}@postgres:5432/gamedeck
       STARTING_COINS: ${STARTING_COINS:-500}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Вход через Telegram Mini App. Пусто — игра работает только как сайт.
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      TELEGRAM_APP_URL: ${TELEGRAM_APP_URL:-}
     # Порт наружу не открываем: в интернет смотрит только Caddy.
     expose:
       - '3000'

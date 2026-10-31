@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { parseDiceStyle, type DiceStyle, type SessionInfo } from '@gamedeck/shared';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   items,
@@ -13,12 +13,21 @@ import {
   sessions,
 } from '../db/schema.js';
 import { changeCoins } from '../db/wallet.js';
+import { displayNameOf, type TelegramUser } from '../telegram/init-data.js';
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+const newToken = () => randomBytes(24).toString('base64url');
+
+/** С чем создаётся игрок. Анонимный — со значениями по умолчанию. */
+interface NewPlayer {
+  telegramId?: number;
+  displayName?: string;
+  avatarUrl?: string | null;
+}
 
 /**
  * Игроки и их сессии. Сессия — секретный токен у клиента; в базе лежит только хэш.
- * Позже сюда добавится вход через Telegram initData (поиск игрока по telegram_id).
+ * Два способа войти: анонимно по токену (браузер) и через Telegram (проверенная initData).
  */
 export class PlayerService {
   constructor(
@@ -46,11 +55,50 @@ export class PlayerService {
     return found?.playerId ?? null;
   }
 
+  /**
+   * Вход из Telegram. initData уже проверена, поэтому telegram id — надёжный ключ игрока:
+   * тот же человек с другого телефона попадёт в тот же профиль.
+   *
+   * - Игрок с этим telegram id есть — обновляем имя и аватар, выдаём сессию.
+   * - Нет, но у клиента токен анонимного игрока — привязываем Telegram к нему,
+   *   чтобы не потерять монеты и рейтинг, набранные до входа через Telegram.
+   * - Иначе — новый игрок.
+   */
+  async resolveTelegram(user: TelegramUser, token: unknown): Promise<SessionInfo> {
+    const profile = { displayName: displayNameOf(user), avatarUrl: user.photo_url ?? null, lastSeenAt: new Date() };
+    const tokenOwner = await this.findPlayerId(token);
+
+    const [known] = await this.db.select({ id: players.id }).from(players).where(eq(players.telegramId, user.id));
+    if (known) {
+      await this.db.update(players).set(profile).where(eq(players.id, known.id));
+      if (tokenOwner === known.id) return { token: token as string, playerId: known.id };
+      return { token: await this.createSession(known.id), playerId: known.id };
+    }
+
+    if (tokenOwner) {
+      // isNull в условии: если игрока уже привязали к другому Telegram, токен не переиспользуем.
+      const [linked] = await this.db
+        .update(players)
+        .set({ ...profile, telegramId: user.id })
+        .where(and(eq(players.id, tokenOwner), isNull(players.telegramId)))
+        .returning({ id: players.id });
+      if (linked) return { token: token as string, playerId: linked.id };
+    }
+
+    return this.register({ telegramId: user.id, displayName: profile.displayName, avatarUrl: profile.avatarUrl });
+  }
+
+  private async createSession(playerId: string): Promise<string> {
+    const token = newToken();
+    await this.db.insert(sessions).values({ tokenHash: hashToken(token), playerId });
+    return token;
+  }
+
   /** Новый игрок: строка в players, сессия, стартовые монеты и бесплатные предметы. */
-  async register(): Promise<SessionInfo> {
-    const token = randomBytes(24).toString('base64url');
+  async register(info: NewPlayer = {}): Promise<SessionInfo> {
+    const token = newToken();
     const playerId = await this.db.transaction(async (tx) => {
-      const [player] = await tx.insert(players).values({}).returning({ id: players.id });
+      const [player] = await tx.insert(players).values(info).returning({ id: players.id });
       const id = player!.id;
       await tx.insert(sessions).values({ tokenHash: hashToken(token), playerId: id });
 
@@ -75,7 +123,7 @@ export class PlayerService {
   /** Публичный профиль: имя, рейтинг и статистика по играм, последние партии, надетые предметы. */
   async profile(playerId: string) {
     const [player] = await this.db
-      .select({ id: players.id, displayName: players.displayName, createdAt: players.createdAt })
+      .select({ id: players.id, displayName: players.displayName, avatarUrl: players.avatarUrl, createdAt: players.createdAt })
       .from(players)
       .where(eq(players.id, playerId));
     if (!player) return null;
@@ -108,6 +156,12 @@ export class PlayerService {
       this.equipment(playerId),
     ]);
     return { ...player, stats, recentMatches: recent, equipment };
+  }
+
+  /** Аватар из Telegram, если игрок входил через Mini App. */
+  async avatarUrl(playerId: string): Promise<string | null> {
+    const [row] = await this.db.select({ avatarUrl: players.avatarUrl }).from(players).where(eq(players.id, playerId));
+    return row?.avatarUrl ?? null;
   }
 
   /** Стиль надетого скина кубиков (цвет грани и точек) — его видят все за столом. */
