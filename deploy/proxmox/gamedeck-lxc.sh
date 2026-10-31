@@ -58,13 +58,37 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-$(openssl rand -hex 24)}
 
 # --- 2. Шаблон Debian ---
 msg "Шаблон Debian"
-pveam update >/dev/null || true
-TEMPLATE=$(pveam available --section system | awk '/debian-1[2-9]-standard/ {print $2}' | sort -V | tail -n1)
-[[ -n $TEMPLATE ]] || die "Не нашёл шаблон Debian в pveam available"
-if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE"; then
-  pveam download "$TEMPLATE_STORAGE" "$TEMPLATE" >/dev/null
+# Сначала ищем уже скачанный шаблон: так скрипт не ходит в сеть вовсе.
+if [[ -z ${TEMPLATE:-} ]]; then
+  TEMPLATE=$(pveam list "$TEMPLATE_STORAGE" | awk '/debian-1[2-9]-standard/ {sub(/.*\//, "", $1); print $1}' | sort -V | tail -n1)
 fi
-ok "$TEMPLATE"
+if [[ -n $TEMPLATE ]] && pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE"; then
+  ok "Уже скачан: $TEMPLATE"
+else
+  # pveam update/download не имеют таймаутов и из РФ могут висеть часами,
+  # поэтому качаем curl'ом по очереди с нескольких зеркал.
+  TEMPLATE_MIRRORS=${TEMPLATE_MIRRORS:-"http://download.proxmox.com/images/system https://mirrors.ustc.edu.cn/proxmox/images/system"}
+  for mirror in $TEMPLATE_MIRRORS; do
+    msg "Пробую $mirror"
+    if [[ -z ${TEMPLATE:-} ]]; then
+      TEMPLATE=$(curl -fsS --connect-timeout 10 --max-time 30 "$mirror/" 2>/dev/null \
+        | grep -o 'debian-1[2-9]-standard_[^"<>]*_amd64\.tar\.zst' | sort -uV | tail -n1 || true)
+      [[ -n $TEMPLATE ]] || { echo "   список шаблонов не получен"; continue; }
+    fi
+    dest=$(pvesm path "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE")
+    mkdir -p "$(dirname "$dest")"
+    # Обрываем загрузку, если она меньше 10 КБ/с дольше минуты.
+    if curl -fL --progress-bar --connect-timeout 15 --speed-limit 10240 --speed-time 60 \
+      -o "$dest.part" "$mirror/$TEMPLATE"; then
+      mv "$dest.part" "$dest"
+      break
+    fi
+    rm -f "$dest.part"
+  done
+  [[ -n ${TEMPLATE:-} && -s $(pvesm path "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE") ]] \
+    || die "Не удалось скачать шаблон Debian. Скачайте его в веб-интерфейсе PVE (local → CT Templates) и запустите скрипт снова"
+  ok "Скачан: $TEMPLATE"
+fi
 
 # --- 3. Контейнер ---
 msg "Создаю контейнер $CTID"
@@ -99,9 +123,10 @@ apt-get update -qq
 apt-get install -y -qq ca-certificates curl git openssl >/dev/null
 
 if ! command -v docker >/dev/null; then
-  if curl -fsSL --max-time 30 https://get.docker.com -o /tmp/get-docker.sh; then
-    sh /tmp/get-docker.sh >/dev/null
-  else
+  # download.docker.com из РФ может быть закрыт — тогда docker.io из репозитория Debian.
+  if ! { curl -fsSL --max-time 30 https://get.docker.com -o /tmp/get-docker.sh \
+    && timeout 600 sh /tmp/get-docker.sh >/dev/null; }; then
+    echo "   get.docker.com недоступен, ставлю docker.io из Debian"
     apt-get install -y -qq docker.io >/dev/null
   fi
 fi
