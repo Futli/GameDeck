@@ -1,6 +1,7 @@
 import type React from 'react';
 import { PLAYER_COLOR_HEX, games, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
 import { isSidePosition, screenPosition, seatsWithPlayers } from '../lib/table';
+import { Avatar } from './Avatar';
 import { Die } from './Die';
 
 interface Props {
@@ -71,6 +72,7 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
               {rolls[player.id] !== undefined && <Die value={rolls[player.id]!} style={player.dice} />}
             </div>
             <div className="seat-name">
+              {player.avatarUrl && <Avatar url={player.avatarUrl} name={player.name} />}
               {player.isHost && <span title="Хост">♛ </span>}
               {player.name}
               {player.id === myId && <span className="muted"> (вы)</span>}

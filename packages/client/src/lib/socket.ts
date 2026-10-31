@@ -9,6 +9,7 @@ import type {
 } from '@gamedeck/shared';
 import { io, type Socket } from 'socket.io-client';
 import { getState, setState } from './store';
+import { tg } from './telegram';
 
 const TOKEN_KEY = 'gamedeck.token';
 
@@ -23,12 +24,25 @@ const readToken = () => {
 /**
  * Одно соединение на всё приложение. auth вызывается при каждом (пере)подключении,
  * поэтому после обрыва сервер получит свежий токен и вернёт нас в комнату.
+ * В Telegram добавляем initData: сервер проверит подпись и узнает, кто мы.
  */
 export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io({
-  auth: (cb) => cb({ token: readToken() }),
+  auth: (cb) => cb({ token: readToken(), ...(tg ? { initData: tg.initData } : {}) }),
 });
 
 socket.on('connect', () => setState({ connected: true }));
+socket.on('connect_error', (err) => {
+  // Ошибка из middleware сервера: Socket.IO сам больше не переподключается.
+  if (err.message === 'TELEGRAM_AUTH_FAILED') {
+    setState({ notice: 'Не удалось проверить вход через Telegram. Закройте и откройте игру заново.' });
+  }
+});
+
+// Ссылка на Mini App для приглашений. Не пришла — ничего страшного, пригласим ссылкой на сайт.
+fetch('/api/config')
+  .then((r) => r.json() as Promise<{ telegramAppUrl: string | null }>)
+  .then(({ telegramAppUrl }) => setState({ telegramAppUrl }))
+  .catch(() => {});
 socket.on('disconnect', () => setState({ connected: false }));
 
 socket.on('session', ({ token, playerId }) => {

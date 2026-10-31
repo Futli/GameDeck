@@ -22,6 +22,10 @@ export interface AppOptions {
   logger?: FastifyServerOptions['logger'];
   rng?: Rng;
   disconnectGraceMs?: number;
+  /** Вход через Telegram Mini App. Без него initData игнорируется. */
+  telegram?: { botToken: string; maxAgeSec: number };
+  /** https://t.me/<бот>/<приложение> — для ссылок-приглашений. */
+  telegramAppUrl?: string | null;
 }
 
 /**
@@ -51,9 +55,10 @@ export async function buildApp(options: AppOptions) {
     stats,
     rng: options.rng ?? cryptoRng,
     disconnectGraceMs: options.disconnectGraceMs ?? 60_000,
+    telegram: options.telegram,
     log: app.log,
   });
-  registerHttpRoutes(app, { rooms, players, stats, shop });
+  registerHttpRoutes(app, { rooms, players, stats, shop, telegramAppUrl: options.telegramAppUrl ?? null });
   if (options.serveClient) await registerClient(app);
 
   // Перед остановкой HTTP закрываем все сокеты, иначе server.close() будет ждать их вечно.

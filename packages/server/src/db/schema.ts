@@ -18,12 +18,14 @@ import {
  * а drizzle-orm выводит из него типы для запросов.
  */
 
-/** Игрок. Пока анонимный (по токену), позже появится telegram_id. */
+/** Игрок. Анонимный (по токену) или привязанный к Telegram через telegram_id. */
 export const players = pgTable('players', {
   id: uuid('id').primaryKey().defaultRandom(),
-  /** Telegram user id. Заполнится, когда подключим авторизацию через initData. */
+  /** Telegram user id. Заполняется при входе из Mini App (проверенная initData). */
   telegramId: bigint('telegram_id', { mode: 'number' }).unique(),
   displayName: text('display_name').notNull().default('Игрок'),
+  /** Аватар из Telegram (photo_url). Обновляется при каждом входе. */
+  avatarUrl: text('avatar_url'),
   /** Баланс виртуальных монет. Меняется только вместе с записью в coin_transactions. */
   coins: bigint('coins', { mode: 'number' }).notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
