@@ -4,7 +4,7 @@ name: gamedeck
 
 services:
   caddy:
-    image: caddy:2-alpine
+    image: mirror.gcr.io/library/caddy:2-alpine
     restart: unless-stopped
     ports:
       - '80:80'
@@ -37,7 +37,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:17-alpine
+    image: mirror.gcr.io/library/postgres:17-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: gamedeck

@@ -2,7 +2,7 @@
 # Сборка: docker build -t gamedeck .
 
 # --- 1. Сборка: ставим все зависимости, собираем shared, server и client ---
-FROM node:22-alpine AS build
+FROM mirror.gcr.io/library/node:22-alpine AS build
 RUN corepack enable
 WORKDIR /src
 
@@ -22,7 +22,7 @@ RUN pnpm --filter @gamedeck/server deploy --prod --legacy /out/server \
  && mkdir -p /out/client && cp -r packages/client/dist /out/client/dist
 
 # --- 2. Запуск: только то, что нужно в рантайме ---
-FROM node:22-alpine
+FROM mirror.gcr.io/library/node:22-alpine
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 WORKDIR /app/packages/server
 # Раскладка как в репозитории: сервер ищет клиент в ../client/dist, миграции в ./drizzle.
