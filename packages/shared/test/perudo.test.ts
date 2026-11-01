@@ -134,7 +134,7 @@ describe('perudo', () => {
     expect(() => perudo.applyMove(s, 'a', { type: 'bid', quantity: 3, face: 5 }, rest)).toThrow('номинал');
     expect(() => perudo.applyMove(s, 'a', { type: 'calza' }, rest)).toThrow('палифико');
     s = perudo.applyMove(s, 'a', { type: 'dudo' }, rest);
-    expect(s.lastReveal).toMatchObject({ actual: 1, loserId: 'b' });
+    expect(s.lastReveal).toMatchObject({ actual: 1, loserId: 'b', palifico: true });
 
     // У b кончились кубики — a победил.
     expect(perudo.winner(s)).toBe('a');

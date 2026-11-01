@@ -1,4 +1,4 @@
-import { MAX_PLAYERS, type RoomView } from '@gamedeck/shared';
+import { MAX_PLAYERS, games, type RoomView } from '@gamedeck/shared';
 import { useState } from 'react';
 import { api } from '../lib/socket';
 
@@ -10,6 +10,16 @@ export function HostPanel({ room }: { room: RoomView }) {
   return (
     <details className="panel">
       <summary>Настройки комнаты</summary>
+      <label className="field row">
+        <span>Игра</span>
+        <select value={settings.gameId} onChange={(e) => void api.updateSettings({ gameId: e.target.value }).catch(() => {})}>
+          {Object.values(games).map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.title}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="field row">
         <span>Игроков максимум</span>
         <select
