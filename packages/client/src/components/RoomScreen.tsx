@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { api } from '../lib/socket';
 import { useClientState } from '../lib/store';
 import { HostPanel } from './HostPanel';
+import { PerudoControls } from './perudo/PerudoControls';
+import { perudoView } from './perudo/view';
 import { Table } from './Table';
 
 const ignore = () => {};
@@ -16,6 +18,7 @@ export function RoomScreen({ room }: { room: RoomView }) {
   const isHost = me?.isHost ?? false;
   const canEdit = isHost && room.status !== 'playing';
   const myTurn = room.game?.currentPlayerId === myId && room.status === 'playing';
+  const perudo = room.status === 'playing' ? perudoView(room) : undefined;
 
   const inviteLink = `${location.origin}/?room=${room.code}`;
   const copyInvite = async () => {
@@ -42,7 +45,8 @@ export function RoomScreen({ room }: { room: RoomView }) {
       <Table room={room} myId={myId} lastMatch={lastMatch} onKick={canEdit ? (id) => void api.kick(id).catch(ignore) : undefined} />
 
       <div className="actions">
-        {myTurn && (
+        {perudo && <PerudoControls view={perudo} me={me} myTurn={myTurn} />}
+        {myTurn && room.game?.gameId === 'dice-high' && (
           <button className="primary big" onClick={() => void api.roll().catch(ignore)}>
             Бросить кубик
           </button>
