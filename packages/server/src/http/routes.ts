@@ -78,6 +78,13 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
     return profile;
   });
 
+  /** Свой профиль: имя для формы входа и статистика на главном экране. */
+  app.get('/api/me', async (request) => {
+    const profile = await players.me(await requirePlayer(request));
+    if (!profile) throw new AppError('PLAYER_NOT_FOUND', 'Игрок не найден');
+    return profile;
+  });
+
   app.get('/api/leaderboard', async (request) => {
     const { game, limit } = leaderboardQuerySchema.parse(request.query);
     return { gameId: game, players: await stats.leaderboard(game, limit) };

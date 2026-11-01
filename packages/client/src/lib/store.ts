@@ -1,10 +1,12 @@
-import type { MatchRecord, RoomView } from '@gamedeck/shared';
+import type { MatchRecord, MyProfile, RoomView } from '@gamedeck/shared';
 import { useSyncExternalStore } from 'react';
 
 /** Всё, что клиент знает о мире. Источник правды — сервер, здесь только последнее, что он прислал. */
 export interface ClientState {
   connected: boolean;
   playerId: string | null;
+  /** Свой профиль: имя, баланс и статистика. null — ещё не загрузился. */
+  profile: MyProfile | null;
   room: RoomView | null;
   /** Итог последней партии с изменением рейтинга. */
   lastMatch: MatchRecord | null;
@@ -17,6 +19,7 @@ export interface ClientState {
 let state: ClientState = {
   connected: false,
   playerId: null,
+  profile: null,
   room: null,
   lastMatch: null,
   notice: null,
