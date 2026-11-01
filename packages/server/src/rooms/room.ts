@@ -9,6 +9,7 @@ import {
   type PlayerColor,
   type RoomSettings,
   type RoomStatus,
+  type RoomSummary,
   type RoomView,
   type Rng,
 } from '@gamedeck/shared';
@@ -217,6 +218,20 @@ export class Room {
         currentPlayerId: game.module.currentPlayer(game.state),
         winnerId: game.module.winner(game.state),
       },
+    };
+  }
+
+  /** Короткая карточка для списка комнат на главной. */
+  toSummary(): RoomSummary {
+    return {
+      code: this.code,
+      status: this.status,
+      gameId: this.settings.gameId,
+      stake: this.settings.stake,
+      hasPassword: this.settings.password !== null,
+      hostName: this.players.get(this.hostId)?.name ?? '',
+      players: this.players.size,
+      maxPlayers: this.settings.maxPlayers,
     };
   }
 

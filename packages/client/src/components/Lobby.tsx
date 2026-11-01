@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../lib/socket';
+import { RoomList } from './RoomList';
 
 const NAME_KEY = 'gamedeck.name';
 
@@ -13,6 +14,7 @@ export function Lobby() {
   const [code, setCode] = useState(initialCode);
   const [password, setPassword] = useState('');
   const [needsPassword, setNeedsPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
   const run = async (action: () => Promise<unknown>) => {
@@ -44,9 +46,31 @@ export function Lobby() {
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Например, Лёха" />
       </label>
 
-      <button className="primary" disabled={busy || !name.trim()} onClick={() => run(() => api.createRoom({ name }))}>
+      <label className="field">
+        <span>Пароль комнаты (необязательно)</span>
+        <input
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          maxLength={32}
+          placeholder="Без пароля — комната открыта всем"
+        />
+      </label>
+
+      <button
+        className="primary"
+        disabled={busy || !name.trim()}
+        onClick={() => run(() => api.createRoom({ name, ...(newPassword ? { settings: { password: newPassword } } : {}) }))}
+      >
         Создать комнату
       </button>
+
+      <RoomList
+        name={name}
+        onJoin={(roomCode, roomPassword) =>
+          run(() => api.joinRoom({ code: roomCode, name, ...(roomPassword ? { password: roomPassword } : {}) }))
+        }
+      />
 
       <div className="divider">или войти по коду</div>
 
