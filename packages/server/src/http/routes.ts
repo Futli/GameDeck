@@ -48,6 +48,9 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
 
   app.get('/api/health', async () => ({ ok: true, rooms: rooms.size }));
 
+  /** Список комнат для главной: сначала без пароля, потом с паролем. */
+  app.get('/api/rooms', async () => ({ rooms: rooms.list() }));
+
   app.get<{ Params: { code: string } }>('/api/rooms/:code', async (request, reply) => {
     const parsed = roomCodeSchema.safeParse(request.params.code);
     const room = parsed.success ? rooms.get(parsed.data) : undefined;

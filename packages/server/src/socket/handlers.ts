@@ -36,6 +36,10 @@ export interface HandlerDeps {
 const playerChannel = (playerId: string) => `player:${playerId}`;
 /** Канал Socket.IO с участниками комнаты. */
 const roomChannel = (code: string) => `room:${code}`;
+/** Канал тех, кто смотрит список комнат на главной. */
+const LOBBY_CHANNEL = 'lobby';
+/** Список комнат рассылаем не чаще, чем раз в это время: ходы в партии не должны заваливать главную. */
+const LOBBY_THROTTLE_MS = 300;
 
 /** Превратить любое исключение в ответ клиенту. Неожиданные ошибки — в лог, наружу — общий текст. */
 function toErrorResult(err: unknown, log: FastifyBaseLogger) {
@@ -53,12 +57,24 @@ function toErrorResult(err: unknown, log: FastifyBaseLogger) {
 export function registerSocketHandlers(deps: HandlerDeps): () => void {
   const { io, rooms, players, stats, rng, log } = deps;
   const leaveTimers = new Map<string, NodeJS.Timeout>();
+  let lobbyTimer: NodeJS.Timeout | null = null;
+
+  /** Сообщить главной, что список комнат мог измениться (с задержкой, чтобы склеить серию изменений). */
+  const notifyLobby = () => {
+    if (lobbyTimer) return;
+    lobbyTimer = setTimeout(() => {
+      lobbyTimer = null;
+      io.to(LOBBY_CHANNEL).emit('rooms:list', rooms.list());
+    }, LOBBY_THROTTLE_MS);
+  };
 
   /**
    * Разослать состояние комнаты. Не одним сообщением на канал комнаты, а
    * каждому игроку своё: в перудо у каждого свой набор видимых кубиков.
    */
   const broadcast = (room: Room | undefined) => {
+    // Любое изменение комнаты (или её исчезновение) может поменять список на главной.
+    notifyLobby();
     if (!room) return;
     for (const id of room.players.keys()) {
       io.to(playerChannel(id)).emit('room:state', room.toView(id));
@@ -208,6 +224,22 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     );
 
     socket.on(
+      'rooms:watch',
+      handle(() => {
+        void socket.join(LOBBY_CHANNEL);
+        return rooms.list();
+      }),
+    );
+
+    socket.on(
+      'rooms:unwatch',
+      handle(() => {
+        void socket.leave(LOBBY_CHANNEL);
+        return null;
+      }),
+    );
+
+    socket.on(
       'game:start',
       handle(() => {
         const room = requireRoom(rooms, playerId);
@@ -250,7 +282,10 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     });
   });
 
-  return () => leaveTimers.forEach(clearTimeout);
+  return () => {
+    leaveTimers.forEach(clearTimeout);
+    if (lobbyTimer) clearTimeout(lobbyTimer);
+  };
 }
 
 function requireRoom(rooms: RoomManager, playerId: string): Room {
