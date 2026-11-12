@@ -61,6 +61,8 @@ function toErrorResult(err: unknown, log: FastifyBaseLogger) {
 export function registerSocketHandlers(deps: HandlerDeps): () => void {
   const { io, rooms, players, skins, stats, rng, log, telegram } = deps;
   const leaveTimers = new Map<string, NodeJS.Timeout>();
+  /** Один таймер на комнату: ближайший дедлайн (ход, бросок, подтверждение). */
+  const roomTimers = new Map<string, NodeJS.Timeout>();
   let lobbyTimer: NodeJS.Timeout | null = null;
 
   /** Сообщить главной, что список комнат мог измениться (с задержкой, чтобы склеить серию изменений). */
@@ -80,6 +82,7 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     // Любое изменение комнаты (или её исчезновение) может поменять список на главной.
     notifyLobby();
     if (!room) return;
+    schedule(room);
     for (const id of room.players.keys()) {
       io.to(playerChannel(id)).emit('room:state', room.toView(id));
     }
@@ -93,6 +96,29 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
         .then((record) => io.to(roomChannel(room.code)).emit('match:recorded', record))
         .catch((err: unknown) => log.error({ err, room: room.code }, 'failed to record match'));
     }
+  };
+
+  /**
+   * Завести таймер комнаты на её ближайший дедлайн. Сама комната времени не ждёт:
+   * она только знает дедлайны, а будит её этот таймер.
+   */
+  const schedule = (room: Room) => {
+    clearTimeout(roomTimers.get(room.code));
+    roomTimers.delete(room.code);
+    const deadline = room.isEmpty ? null : room.nextDeadline();
+    if (deadline === null) return;
+    roomTimers.set(
+      room.code,
+      setTimeout(() => {
+        roomTimers.delete(room.code);
+        if (rooms.get(room.code) !== room) return; // комнату уже удалили
+        for (const id of rooms.expire(room, rng)) {
+          io.in(playerChannel(id)).socketsLeave(roomChannel(room.code));
+          io.to(playerChannel(id)).emit('room:kicked', { code: room.code, reason: 'timeout' });
+        }
+        broadcast(room.isEmpty ? undefined : room);
+      }, Math.max(0, deadline - Date.now())),
+    );
   };
 
   /** Имя из формы входа сохраняем в профиль, чтобы оно было в таблице лидеров. */
@@ -238,7 +264,7 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
         const { playerId: targetId } = kickSchema.parse(input);
         const room = rooms.kick(playerId, targetId);
         exitRoom(room.code, targetId);
-        io.to(playerChannel(targetId)).emit('room:kicked', { code: room.code });
+        io.to(playerChannel(targetId)).emit('room:kicked', { code: room.code, reason: 'host' });
         broadcast(room);
         return room.toView(playerId);
       }),
@@ -282,6 +308,16 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     );
 
     socket.on(
+      'room:ready',
+      handle(() => {
+        const room = requireRoom(rooms, playerId);
+        room.setReady(playerId, rng);
+        broadcast(room);
+        return room.toView(playerId);
+      }),
+    );
+
+    socket.on(
       'game:move',
       handle(([input]) => {
         const room = requireRoom(rooms, playerId);
@@ -316,6 +352,7 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
 
   return () => {
     leaveTimers.forEach(clearTimeout);
+    roomTimers.forEach(clearTimeout);
     if (lobbyTimer) clearTimeout(lobbyTimer);
   };
 }

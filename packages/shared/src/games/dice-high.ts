@@ -71,6 +71,11 @@ export const diceHigh: GameModule<DiceHighState, DiceHighMove> = {
     return state.contenders[state.turnIndex] ?? null;
   },
 
+  timeoutMove() {
+    // Бросок за молчащего игрока ничего у него не отнимает — кубик всё равно случайный.
+    return { type: 'roll' };
+  },
+
   applyMove(state, playerId, move, rng) {
     if (state.winnerId) throw new GameRuleError('GAME_OVER', 'Игра уже окончена');
     if (this.currentPlayer(state) !== playerId) {

@@ -30,6 +30,18 @@ export interface GameModule<State, Move> {
   start(playerIds: readonly string[], rng: Rng): State;
   /** Чей сейчас ход, или null, если игра окончена. */
   currentPlayer(state: State): string | null;
+  /**
+   * Кто должен действовать прямо сейчас все вместе, без очереди (бросок кубиков
+   * в начале раунда перудо). Пока список не пуст, currentPlayer — null.
+   * Не задано или пусто — ходят по очереди.
+   */
+  awaiting?(state: State): string[];
+  /**
+   * Ход за игрока, у которого кончилось время на ход. null — сходить за него
+   * нельзя (например, бросить кубики): тогда комната исключает игрока.
+   * Не задано — тоже исключение.
+   */
+  timeoutMove?(state: State, playerId: string): Move | null;
   /** Применить ход. Бросает GameRuleError, если ход недопустим. */
   applyMove(state: State, playerId: string, move: Move, rng: Rng): State;
   /** Игрок покинул игру: убрать его из очереди ходов. */

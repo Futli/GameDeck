@@ -10,7 +10,7 @@ const ignore = () => {};
 function isValid(prev: PerudoBid | null, quantity: number, face: number, view: PerudoView): boolean {
   if (quantity < 1 || quantity > view.totalDice) return false;
   try {
-    assertValidRaise(prev, { quantity, face }, view.palifico);
+    assertValidRaise(prev, { quantity, face }, view.maputo);
     return true;
   } catch {
     return false;
@@ -63,7 +63,7 @@ export function PerudoControls({
   const myHand = view.hands[me?.id ?? '']?.dice;
   const reveal = shownReveal(view);
   const valid = isValid(prev, quantity, face, view);
-  const faceLocked = view.palifico && prev !== null;
+  const faceLocked = view.maputo && prev !== null;
 
   return (
     <div className="pd-controls">
@@ -90,7 +90,7 @@ export function PerudoControls({
                 role="radio"
                 aria-checked={face === f}
                 className={face === f ? 'pd-face pd-face--active' : 'pd-face'}
-                disabled={busy || (faceLocked && f !== prev!.face) || (!prev && f === 1 && !view.palifico)}
+                disabled={busy || (faceLocked && f !== prev!.face) || (!prev && f === 1 && !view.maputo)}
                 onClick={() => pickFace(f)}
               >
                 <Die value={f} size={28} style={me?.dice} skin={me?.skins.dice} />
@@ -123,16 +123,16 @@ export function PerudoControls({
                 Не верю!
               </button>
               <button
-                disabled={busy || view.palifico}
+                disabled={busy || view.maputo}
                 onClick={() => send({ type: 'calza' })}
-                title={view.palifico ? 'В палифико нельзя' : ''}
+                title={view.maputo ? 'В мапуто нельзя' : ''}
               >
                 Точно!
               </button>
             </div>
           )}
-          {view.palifico && (
-            <p className="muted center">Палифико: единицы не джокеры{prev ? ', номинал менять нельзя' : ''}</p>
+          {view.maputo && (
+            <p className="muted center">Мапуто: единицы не джокеры{prev ? ', номинал менять нельзя' : ''}</p>
           )}
         </>
       ) : (

@@ -11,7 +11,7 @@ export function PerudoCenter({ view, nameOf }: { view: PerudoView; nameOf: (id: 
     <>
       <div className="round">
         Раунд {view.round}
-        {view.palifico && !view.winnerId && <span className="pd-palifico"> · палифико</span>}
+        {view.maputo && !view.winnerId && <span className="pd-maputo"> · мапуто</span>}
       </div>
       <div className="muted">На столе {view.totalDice} куб.</div>
 
