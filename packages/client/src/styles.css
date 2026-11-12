@@ -234,3 +234,53 @@ input, select {
   .mat, .seat--empty::before { width: 104px; height: 52px; }
   .seat--side .mat, .seat--side.seat--empty::before { width: 52px; height: 104px; }
 }
+
+/* ─── Выбор игры ────────────────────────────────────────── */
+
+.game-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.game-option {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+  background: var(--surface); border: 2px solid var(--surface-2); padding: 10px 12px;
+}
+.game-option .muted { font-size: 0.8rem; }
+.game-option--active { border-color: var(--accent); background: var(--surface-2); }
+
+/* ─── Перудо ────────────────────────────────────────────── */
+
+.pd-mat { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 0.8rem; }
+.pd-dice { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; max-width: 120px; }
+.seat--side .pd-dice { flex-direction: column; max-width: none; }
+.pd-miss { opacity: 0.35; }
+.pd-count { font-weight: 700; text-shadow: 0 2px 0 #000a; }
+.cup { display: block; filter: drop-shadow(0 3px 0 #0009); }
+.seat--side .pd-mat--cup { flex-direction: column; }
+.pd-badge {
+  position: absolute; top: -14px; right: -14px; padding: 1px 6px; border-radius: 8px;
+  font-weight: 700; font-size: 0.8rem; color: #fff;
+}
+.pd-badge--bad { background: var(--bad); }
+.pd-badge--good { background: var(--good); }
+.pd-palifico { color: #ff8fd0; }
+.pd-bid { display: flex; align-items: center; gap: 6px; font-size: 1.1rem; }
+.pd-reveal { font-size: 0.85rem; display: flex; flex-direction: column; gap: 2px; }
+
+.pd-controls { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.pd-hand { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pd-hand .pd-dice { max-width: none; }
+.pd-faces { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.pd-face { padding: 4px; border: 2px solid transparent; background: var(--surface); }
+.pd-face--active { border-color: var(--accent); }
+.pd-stepper { display: flex; align-items: center; gap: 12px; }
+.pd-stepper button { width: 48px; font-size: 1.3rem; }
+.pd-quantity { min-width: 40px; text-align: center; font-size: 1.6rem; font-weight: 700; }
+.pd-calls { display: flex; gap: 8px; }
+.pd-calls button { min-width: 106px; }
+.pd-dudo { background: var(--bad); color: #fff; font-weight: 600; }
+
+@media (max-width: 420px) {
+  .mat .die { width: 18px; height: 18px; }
+  .pd-dice { gap: 2px; }
+}
+.pd-hit, .pd-miss { display: block; }
+/* Мелкий текст в центре стола светлее обычного: серый на зелёном сукне не читается. */
+.table-center .muted { color: #cfe8da; }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/socket';
+import { GamePicker, loadGameChoice, saveGameChoice } from './GamePicker';
 import { RoomList } from './RoomList';
 import { useClientState } from '../lib/store';
 import { Avatar } from './Avatar';
@@ -23,6 +24,7 @@ export function Lobby() {
   const [password, setPassword] = useState('');
   const [needsPassword, setNeedsPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [gameId, setGameId] = useState(loadGameChoice);
   const [busy, setBusy] = useState(false);
   const profile = useClientState((s) => s.profile);
   const nameEdited = useRef(false);
@@ -87,6 +89,17 @@ export function Lobby() {
 
       {profile && <ProfileStats profile={profile} />}
 
+      <div className="field">
+        <span>Во что играем</span>
+        <GamePicker
+          value={gameId}
+          onChange={(id) => {
+            setGameId(id);
+            saveGameChoice(id);
+          }}
+        />
+      </div>
+
       <label className="field">
         <span>Пароль комнаты (необязательно)</span>
         <input
@@ -101,7 +114,7 @@ export function Lobby() {
       <button
         className="primary"
         disabled={busy || !name.trim()}
-        onClick={() => run(() => api.createRoom({ name, ...(newPassword ? { settings: { password: newPassword } } : {}) }))}
+        onClick={() => run(() => api.createRoom({ name, settings: { gameId, ...(newPassword ? { password: newPassword } : {}) } }))}
       >
         Создать комнату
       </button>
