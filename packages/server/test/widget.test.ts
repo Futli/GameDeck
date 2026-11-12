@@ -86,6 +86,14 @@ describe('сборка HTML виджета', () => {
     expect(html).not.toMatch(/^\s*\/\//m);
   });
 
+  it('на английском: все надписи переведены и виджет влезает в лимит', () => {
+    const html = buildWidgetHtml(skins, links, 'en');
+    expect(html).not.toMatch(/[А-Яа-яЁё]/);
+    expect(html).not.toMatch(/@\w+@/);
+    expect(html).toContain('Find a game');
+    expect(measureWidget(html).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
+  });
+
   it('не использует то, чего в виджете нет: сеть, внешние ресурсы, поля ввода', () => {
     const html = buildWidgetHtml(skins, links);
     for (const banned of ['fetch(', 'XMLHttpRequest', 'WebSocket', 'src=', '<input', 'addEventListener']) {
