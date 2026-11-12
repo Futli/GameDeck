@@ -75,6 +75,11 @@ describe('socket protocol', () => {
     const record = await recorded;
     const bob = record.players.find((p) => p.playerId === b.session.playerId);
     expect(bob).toMatchObject({ place: 1, ratingBefore: 1000, ratingAfter: 1016 });
+
+    // Профиль Боба на главном экране: имя из формы и сыгранная партия.
+    const me = await fetch(`${url}/api/me`, { headers: { authorization: `Bearer ${b.session.token}` } });
+    expect(await me.json()).toMatchObject({ displayName: 'Боб', gamesPlayed: 1, wins: 1 });
+    expect((await fetch(`${url}/api/me`)).status).toBe(401);
   });
 
   it('главная видит список комнат и его обновления', async () => {
