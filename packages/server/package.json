@@ -11,7 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "widget:preview": "tsx --conditions=source src/widget/preview.ts",
-    "widget:bot": "tsx --conditions=source src/widget/dev-bot.ts"
+    "xray:config": "tsx --conditions=source src/proxy/xray-config-cli.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.13",
@@ -21,6 +21,7 @@
     "fastify": "^5.6.0",
     "pg": "^8.23.1",
     "socket.io": "^4.8.1",
+    "undici": "^7.30.2",
     "zod": "^4.1.0"
   },
   "devDependencies": {
