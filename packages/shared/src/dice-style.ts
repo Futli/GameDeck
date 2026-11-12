@@ -53,6 +53,23 @@ export const DICE_PIP_LAYOUT: Record<number, ReadonlyArray<readonly [number, num
   ],
 };
 
+/** Смешать два цвета #rrggbb: t = 0 — первый, t = 1 — второй. */
+function mix(a: string, b: string, t: number): string {
+  const channel = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  const out = [0, 1, 2].map((i) => Math.round(channel(a, i) * (1 - t) + channel(b, i) * t));
+  return `#${out.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Оттенки, которые рисующий кубик вычисляет из двух цветов скина: свет падает слева сверху. */
+export function diceShades(style: DiceStyle) {
+  return {
+    outline: mix(style.face, '#000000', 0.55),
+    shade: mix(style.face, '#000000', 0.22),
+    light: mix(style.face, '#ffffff', 0.45),
+    pipLight: mix(style.pips, '#ffffff', 0.25),
+  };
+}
+
 const HEX = /^#[0-9a-f]{6}$/i;
 
 /** Разобрать стиль кубика из JSON (поле asset у скина в каталоге). Мусор — стиль по умолчанию. */

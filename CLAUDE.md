@@ -18,6 +18,7 @@
 | [docs/practices/code.md](docs/practices/code.md)                                                                                             | писать код или тесты, добавлять игру |
 | [docs/practices/git.md](docs/practices/git.md)                                                                                               | ветку, коммит, пуш или PR            |
 | [docs/server-guide.md](docs/server-guide.md), [docs/database-guide.md](docs/database-guide.md), [docs/client-guide.md](docs/client-guide.md) | работу в соответствующем пакете      |
+| [docs/widget-guide.md](docs/widget-guide.md)                                                                                                 | виджет Telegram «Кубик удачи»        |
 | [docs/deploy-guide.md](docs/deploy-guide.md)                                                                                                 | что-либо про сервер и деплой         |
 
 ## Машины
