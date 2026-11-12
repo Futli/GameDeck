@@ -1,6 +1,6 @@
 import type React from 'react';
 import { PLAYER_COLOR_HEX, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
-import { isSidePosition, screenPosition, seatsWithPlayers } from '../lib/table';
+import { isSidePosition, seatLayout, tableSize } from '../lib/table';
 import { skinImageUrl } from '../lib/skins';
 import { useT } from '../i18n';
 import { Avatar } from './Avatar';
@@ -25,13 +25,11 @@ function visibleRolls(state: DiceHighState | undefined): Record<string, number> 
 }
 
 /**
- * Стол на 6 мест. Сервер присылает места 0..5, клиент поворачивает стол так,
- * чтобы своё место было снизу. Центр стола — информация о партии.
+ * Стол под число игроков: пустых мест нет, раскладка и размер стола зависят от того,
+ * сколько людей в комнате (`lib/table.ts`). Свой коврик всегда снизу. Центр стола — информация о партии.
  */
 export function Table({ room, myId, lastMatch, onKick }: Props) {
   const t = useT();
-  const me = room.players.find((p) => p.id === myId);
-  const mySeat = me?.seat ?? 0;
   const game = room.game;
   // У каждой игры своё состояние: стол знает, как нарисовать коврик и центр для каждой.
   const state = game?.gameId === 'dice-high' ? (game.state as DiceHighState) : undefined;
@@ -40,14 +38,9 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
   const nameOf = (id: string | null) => room.players.find((p) => p.id === id)?.name ?? '—';
 
   return (
-    <div className="table">
-      {seatsWithPlayers(room.players).map(({ seat, player }) => {
-        const position = screenPosition(seat, mySeat);
+    <div className={`table table--${tableSize(room.players.length)}`}>
+      {seatLayout(room.players, myId).map(({ player, position }) => {
         const side = isSidePosition(position) && 'seat--side';
-        if (!player)
-          return (
-            <div key={seat} className={['seat', `seat--${position}`, side, 'seat--empty'].filter(Boolean).join(' ')} />
-          );
 
         const isTurn = game?.currentPlayerId === player.id;
         const isWinner = game?.winnerId === player.id;
@@ -59,7 +52,7 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
 
         return (
           <div
-            key={seat}
+            key={player.id}
             className={[
               'seat',
               `seat--${position}`,
