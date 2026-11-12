@@ -7,7 +7,14 @@ import { PLAYER_COLOR_HEX, type PlayerColor } from '@gamedeck/shared';
 export function Cup({ color, size = 36 }: { color: PlayerColor; size?: number }) {
   const { light, main, shade } = PLAYER_COLOR_HEX[color];
   return (
-    <svg className="cup" width={size} height={(size * 18) / 16} viewBox="0 0 16 18" shapeRendering="crispEdges" aria-hidden>
+    <svg
+      className="cup"
+      width={size}
+      height={(size * 18) / 16}
+      viewBox="0 0 16 18"
+      shapeRendering="crispEdges"
+      aria-hidden
+    >
       {/* Обводка */}
       <rect x={4} y={0} width={8} height={1} fill="#000a" />
       <rect x={3} y={1} width={10} height={4} fill="#000a" />

@@ -40,7 +40,10 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
       {seatsWithPlayers(room.players).map(({ seat, player }) => {
         const position = screenPosition(seat, mySeat);
         const side = isSidePosition(position) && 'seat--side';
-        if (!player) return <div key={seat} className={['seat', `seat--${position}`, side, 'seat--empty'].filter(Boolean).join(' ')} />;
+        if (!player)
+          return (
+            <div key={seat} className={['seat', `seat--${position}`, side, 'seat--empty'].filter(Boolean).join(' ')} />
+          );
 
         const isTurn = game?.currentPlayerId === player.id;
         const isWinner = game?.winnerId === player.id;
@@ -114,7 +117,9 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
             Ждём игроков: {room.players.length}/{room.settings.maxPlayers}
           </div>
         )}
-        {room.status === 'playing' && game && !state && !perudo && <div className="muted">Интерфейс этой игры ещё в работе</div>}
+        {room.status === 'playing' && game && !state && !perudo && (
+          <div className="muted">Интерфейс этой игры ещё в работе</div>
+        )}
         {room.status !== 'lobby' && perudo && <PerudoCenter view={perudo} nameOf={nameOf} />}
         {room.status === 'playing' && state && (
           <>

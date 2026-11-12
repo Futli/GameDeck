@@ -124,7 +124,12 @@ export class PlayerService {
   /** Публичный профиль: имя, рейтинг и статистика по играм, последние партии, надетые предметы. */
   async profile(playerId: string) {
     const [player] = await this.db
-      .select({ id: players.id, displayName: players.displayName, avatarUrl: players.avatarUrl, createdAt: players.createdAt })
+      .select({
+        id: players.id,
+        displayName: players.displayName,
+        avatarUrl: players.avatarUrl,
+        createdAt: players.createdAt,
+      })
       .from(players)
       .where(eq(players.id, playerId));
     if (!player) return null;
@@ -184,7 +189,9 @@ export class PlayerService {
           coinsLost: sql<number>`coalesce(sum(-${coinTransactions.amount}) filter (where ${coinTransactions.reason} = 'match_stake'), 0)::int`,
         })
         .from(coinTransactions)
-        .where(and(eq(coinTransactions.playerId, playerId), inArray(coinTransactions.reason, ['match_win', 'match_stake']))),
+        .where(
+          and(eq(coinTransactions.playerId, playerId), inArray(coinTransactions.reason, ['match_win', 'match_stake'])),
+        ),
     ]);
     return { ...player, ...games!, ...money! };
   }

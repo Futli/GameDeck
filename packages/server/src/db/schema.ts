@@ -19,18 +19,22 @@ import {
  */
 
 /** Игрок. Анонимный (по токену) или привязанный к Telegram через telegram_id. */
-export const players = pgTable('players', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  /** Telegram user id. Заполняется при входе из Mini App (проверенная initData). */
-  telegramId: bigint('telegram_id', { mode: 'number' }).unique(),
-  displayName: text('display_name').notNull().default('Игрок'),
-  /** Аватар из Telegram (photo_url). Обновляется при каждом входе. */
-  avatarUrl: text('avatar_url'),
-  /** Баланс виртуальных монет. Меняется только вместе с записью в coin_transactions. */
-  coins: bigint('coins', { mode: 'number' }).notNull().default(0),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check('players_coins_non_negative', sql`${t.coins} >= 0`)]);
+export const players = pgTable(
+  'players',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Telegram user id. Заполняется при входе из Mini App (проверенная initData). */
+    telegramId: bigint('telegram_id', { mode: 'number' }).unique(),
+    displayName: text('display_name').notNull().default('Игрок'),
+    /** Аватар из Telegram (photo_url). Обновляется при каждом входе. */
+    avatarUrl: text('avatar_url'),
+    /** Баланс виртуальных монет. Меняется только вместе с записью в coin_transactions. */
+    coins: bigint('coins', { mode: 'number' }).notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('players_coins_non_negative', sql`${t.coins} >= 0`)],
+);
 
 /** Сессии: храним не сам токен, а его SHA-256, чтобы утечка БД не давала войти за игрока. */
 export const sessions = pgTable(
@@ -76,7 +80,9 @@ export const matches = pgTable(
     stake: integer('stake').notNull().default(0),
     winnerId: uuid('winner_id').references(() => players.id, { onDelete: 'set null' }),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
-    finishedAt: timestamp('finished_at', { withTimezone: true }).notNull().default(sql`now()`),
+    finishedAt: timestamp('finished_at', { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
   },
   (t) => [index('matches_finished_idx').on(t.finishedAt.desc())],
 );
@@ -97,10 +103,7 @@ export const matchPlayers = pgTable(
     ratingBefore: integer('rating_before').notNull(),
     ratingAfter: integer('rating_after').notNull(),
   },
-  (t) => [
-    primaryKey({ columns: [t.matchId, t.playerId] }),
-    index('match_players_player_idx').on(t.playerId),
-  ],
+  (t) => [primaryKey({ columns: [t.matchId, t.playerId] }), index('match_players_player_idx').on(t.playerId)],
 );
 
 // ─── Монетизация ────────────────────────────────────────────────────────────

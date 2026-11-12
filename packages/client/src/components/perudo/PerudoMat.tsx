@@ -23,7 +23,9 @@ export function PerudoMat({ view, player, myId }: { view: PerudoView; player: Pl
             </span>
           ))}
         </div>
-        {(lost || gained) && <span className={lost ? 'pd-badge pd-badge--bad' : 'pd-badge pd-badge--good'}>{lost ? '−1' : '+1'}</span>}
+        {(lost || gained) && (
+          <span className={lost ? 'pd-badge pd-badge--bad' : 'pd-badge pd-badge--good'}>{lost ? '−1' : '+1'}</span>
+        )}
       </div>
     );
   }
@@ -50,4 +52,3 @@ export function PerudoMat({ view, player, myId }: { view: PerudoView; player: Pl
     </div>
   );
 }
-

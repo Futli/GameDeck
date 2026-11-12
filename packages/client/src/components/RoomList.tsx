@@ -12,12 +12,22 @@ const STATUS_TEXT: Record<RoomSummary['status'], string> = {
  * Уже созданные комнаты на главной. Сервер присылает их отсортированными:
  * сначала открытые, потом с паролем. Список обновляется сам, пока экран открыт.
  */
-export function RoomList({ name, onJoin }: { name: string; onJoin: (code: string, password?: string) => Promise<void> }) {
+export function RoomList({
+  name,
+  onJoin,
+}: {
+  name: string;
+  onJoin: (code: string, password?: string) => Promise<void>;
+}) {
   const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
 
   useEffect(() => {
-    const watch = () => void api.watchRooms().then(setRooms).catch(() => {});
+    const watch = () =>
+      void api
+        .watchRooms()
+        .then(setRooms)
+        .catch(() => {});
     // После обрыва связи сервер забывает подписку — подписываемся снова.
     socket.on('connect', watch);
     socket.on('rooms:list', setRooms);
@@ -89,7 +99,8 @@ function RoomCard({
             {room.stake > 0 && <span className="muted"> · ставка {room.stake}</span>}
           </div>
           <div className="muted">
-            {room.hostName} · {room.players}/{room.maxPlayers} · {full && room.status !== 'playing' ? 'мест нет' : STATUS_TEXT[room.status]}
+            {room.hostName} · {room.players}/{room.maxPlayers} ·{' '}
+            {full && room.status !== 'playing' ? 'мест нет' : STATUS_TEXT[room.status]}
           </div>
         </div>
         {room.hasPassword ? (

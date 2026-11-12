@@ -114,7 +114,9 @@ export function Lobby() {
       <button
         className="primary"
         disabled={busy || !name.trim()}
-        onClick={() => run(() => api.createRoom({ name, settings: { gameId, ...(newPassword ? { password: newPassword } : {}) } }))}
+        onClick={() =>
+          run(() => api.createRoom({ name, settings: { gameId, ...(newPassword ? { password: newPassword } : {}) } }))
+        }
       >
         Создать комнату
       </button>

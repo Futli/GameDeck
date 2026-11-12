@@ -1,5 +1,13 @@
 import type { AddressInfo } from 'node:net';
-import type { ClientToServerEvents, MatchRecord, PerudoView, RoomSummary, RoomView, ServerToClientEvents, SessionInfo } from '@gamedeck/shared';
+import type {
+  ClientToServerEvents,
+  MatchRecord,
+  PerudoView,
+  RoomSummary,
+  RoomView,
+  ServerToClientEvents,
+  SessionInfo,
+} from '@gamedeck/shared';
 import { io as connect, type Socket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
@@ -18,7 +26,11 @@ describe('socket protocol', () => {
     let roll = 0;
     const faces = [6, 6, 3, 5];
     const { db } = await testDatabase();
-    const { app } = await buildApp({ db, rng: () => ((faces[roll++ % faces.length] ?? 1) - 1) / 6, disconnectGraceMs: 50 });
+    const { app } = await buildApp({
+      db,
+      rng: () => ((faces[roll++ % faces.length] ?? 1) - 1) / 6,
+      disconnectGraceMs: 50,
+    });
     await app.listen({ host: '127.0.0.1', port: 0 });
     url = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
     close = () => app.close();
@@ -144,7 +156,9 @@ describe('socket protocol', () => {
   it('перудо по сети: чужие кубики не уходят на клиент', async () => {
     const a = await client();
     const b = await client();
-    const room = await call<RoomView>(a.socket.emitWithAck('room:create', { name: 'Алиса', color: 'blue', settings: { gameId: 'perudo' } }));
+    const room = await call<RoomView>(
+      a.socket.emitWithAck('room:create', { name: 'Алиса', color: 'blue', settings: { gameId: 'perudo' } }),
+    );
     await call(b.socket.emitWithAck('room:join', { code: room.code, name: 'Боб', color: 'blue' }));
 
     const bobState = new Promise<RoomView>((resolve) => b.socket.once('room:state', resolve));

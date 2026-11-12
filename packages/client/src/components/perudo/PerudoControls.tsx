@@ -24,7 +24,15 @@ function minQuantity(prev: PerudoBid | null, face: number, view: PerudoView): nu
 }
 
 /** Ход в перудо: выбрать количество и номинал, или «Не верю!» / «Точно!». */
-export function PerudoControls({ view, me, myTurn }: { view: PerudoView; me: PlayerView | undefined; myTurn: boolean }) {
+export function PerudoControls({
+  view,
+  me,
+  myTurn,
+}: {
+  view: PerudoView;
+  me: PlayerView | undefined;
+  myTurn: boolean;
+}) {
   const prev = view.bids.at(-1) ?? null;
   const startFace = prev && prev.face !== 1 ? prev.face : prev ? 1 : 2;
   const [face, setFace] = useState(startFace);
@@ -94,11 +102,19 @@ export function PerudoControls({ view, me, myTurn }: { view: PerudoView; me: Pla
               −
             </button>
             <span className="pd-quantity">{quantity}</span>
-            <button type="button" disabled={busy || quantity >= view.totalDice} onClick={() => setQuantity(quantity + 1)}>
+            <button
+              type="button"
+              disabled={busy || quantity >= view.totalDice}
+              onClick={() => setQuantity(quantity + 1)}
+            >
               +
             </button>
           </div>
-          <button className="primary big" disabled={busy || !valid} onClick={() => send({ type: 'bid', quantity, face })}>
+          <button
+            className="primary big"
+            disabled={busy || !valid}
+            onClick={() => send({ type: 'bid', quantity, face })}
+          >
             Ставка: {bidText(quantity, face)}
           </button>
           {prev && (
@@ -106,12 +122,18 @@ export function PerudoControls({ view, me, myTurn }: { view: PerudoView; me: Pla
               <button className="pd-dudo" disabled={busy} onClick={() => send({ type: 'dudo' })}>
                 Не верю!
               </button>
-              <button disabled={busy || view.palifico} onClick={() => send({ type: 'calza' })} title={view.palifico ? 'В палифико нельзя' : ''}>
+              <button
+                disabled={busy || view.palifico}
+                onClick={() => send({ type: 'calza' })}
+                title={view.palifico ? 'В палифико нельзя' : ''}
+              >
                 Точно!
               </button>
             </div>
           )}
-          {view.palifico && <p className="muted center">Палифико: единицы не джокеры{prev ? ', номинал менять нельзя' : ''}</p>}
+          {view.palifico && (
+            <p className="muted center">Палифико: единицы не джокеры{prev ? ', номинал менять нельзя' : ''}</p>
+          )}
         </>
       ) : (
         <p className="muted center">Ждём ход другого игрока</p>

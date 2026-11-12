@@ -35,7 +35,8 @@ export class RoomManager {
    * затем более полные, затем с идущей игрой.
    */
   list(): RoomSummary[] {
-    const rank = (r: RoomSummary) => (r.status !== 'playing' && r.players < r.maxPlayers ? 0 : r.status === 'playing' ? 2 : 1);
+    const rank = (r: RoomSummary) =>
+      r.status !== 'playing' && r.players < r.maxPlayers ? 0 : r.status === 'playing' ? 2 : 1;
     return [...this.rooms.values()]
       .map((room) => room.toSummary())
       .sort(

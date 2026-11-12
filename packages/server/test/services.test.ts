@@ -86,7 +86,11 @@ describe('база: игроки, статистика, магазин', () => {
     });
 
     it('ставка: проигравшие платят, победитель забирает банк, профиль считает итоги', async () => {
-      const ids = [(await players.register()).playerId, (await players.register()).playerId, (await players.register()).playerId];
+      const ids = [
+        (await players.register()).playerId,
+        (await players.register()).playerId,
+        (await players.register()).playerId,
+      ];
       const [a, b, c] = ids as [string, string, string];
 
       const record = await stats.recordMatch(match(ids, 0, 100));

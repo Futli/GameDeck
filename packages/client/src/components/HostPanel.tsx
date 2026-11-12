@@ -12,7 +12,10 @@ export function HostPanel({ room }: { room: RoomView }) {
       <summary>Настройки комнаты</summary>
       <label className="field row">
         <span>Игра</span>
-        <select value={settings.gameId} onChange={(e) => void api.updateSettings({ gameId: e.target.value }).catch(() => {})}>
+        <select
+          value={settings.gameId}
+          onChange={(e) => void api.updateSettings({ gameId: e.target.value }).catch(() => {})}
+        >
           {Object.values(games).map((g) => (
             <option key={g.id} value={g.id}>
               {g.title}

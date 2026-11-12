@@ -56,7 +56,11 @@ export const telegramUser = tg?.initDataUnsafe.user ?? null;
 
 /** Имя по тем же правилам, что и на сервере (displayNameOf). */
 export const telegramName = telegramUser
-  ? ([telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(' ').trim() || telegramUser.username || 'Игрок').slice(0, 24)
+  ? (
+      [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(' ').trim() ||
+      telegramUser.username ||
+      'Игрок'
+    ).slice(0, 24)
   : null;
 
 /** Код комнаты из ссылки t.me/<бот>/<приложение>?startapp=K7M2Q. */

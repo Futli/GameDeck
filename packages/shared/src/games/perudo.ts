@@ -90,8 +90,7 @@ export type PerudoMove = z.infer<typeof perudoMoveSchema>;
 
 const isActive = (state: PerudoState, id: string) => (state.dice[id]?.length ?? 0) > 0;
 const activePlayers = (state: PerudoState) => state.order.filter((id) => isActive(state, id));
-const totalDice = (state: PerudoState) =>
-  state.order.reduce((sum, id) => sum + (state.dice[id]?.length ?? 0), 0);
+const totalDice = (state: PerudoState) => state.order.reduce((sum, id) => sum + (state.dice[id]?.length ?? 0), 0);
 
 /** Следующий игрок с кубиками после fromId по кругу (fromId может уже выбыть). */
 function nextActive(state: PerudoState, fromId: string, order = state.order): string | null {

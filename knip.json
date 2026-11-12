@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": ["playwright"],
+  "workspaces": {
+    ".": {
+      "entry": [".claude/**/*.cjs", ".github/scripts/*.mjs"]
+    },
+    "packages/*": {}
+  }
+}

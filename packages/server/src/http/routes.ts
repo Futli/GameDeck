@@ -34,7 +34,8 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
       const status = err.code === 'UNAUTHORIZED' ? 401 : err.code.endsWith('NOT_FOUND') ? 404 : 400;
       return reply.code(status).send({ error: err.code, message: err.message });
     }
-    if (err instanceof z.ZodError) return reply.code(400).send({ error: 'BAD_REQUEST', message: err.issues[0]?.message });
+    if (err instanceof z.ZodError)
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: err.issues[0]?.message });
     app.log.error(err);
     return reply.code(500).send({ error: 'INTERNAL' });
   });

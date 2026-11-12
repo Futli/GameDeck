@@ -107,7 +107,10 @@ describe('вход через Telegram по сокету', () => {
   });
 
   const open = (auth: Record<string, unknown>) => {
-    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = connect(url, { auth, transports: ['websocket'] });
+    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = connect(url, {
+      auth,
+      transports: ['websocket'],
+    });
     sockets.push(socket);
     return socket;
   };

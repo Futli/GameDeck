@@ -11,14 +11,24 @@ export default tseslint.config(
   {
     rules: {
       // Неиспользуемое — ошибка, но `_name` можно оставить намеренно.
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
       // verbatimModuleSyntax: типы импортируем через `import type`.
       '@typescript-eslint/consistent-type-imports': 'error',
       eqeqeq: ['error', 'smart'],
     },
   },
   {
-    files: ['packages/server/**/*.ts', 'packages/shared/**/*.ts', '*.ts', '*.js', '.claude/**/*.cjs'],
+    files: [
+      'packages/server/**/*.ts',
+      'packages/shared/**/*.ts',
+      '*.ts',
+      '*.js',
+      '.claude/**/*.cjs',
+      '.github/**/*.mjs',
+    ],
     languageOptions: { globals: globals.node },
   },
   {

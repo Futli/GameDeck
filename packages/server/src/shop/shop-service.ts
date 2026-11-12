@@ -106,11 +106,13 @@ export class ShopService {
 
       if (payment.productKind === 'coin_pack') {
         const [pack] = await tx.select().from(coinPacks).where(eq(coinPacks.id, payment.productId));
-        if (!pack || pack.priceStars !== payment.stars) throw new AppError('BAD_PAYMENT', 'Платёж не совпадает с товаром');
+        if (!pack || pack.priceStars !== payment.stars)
+          throw new AppError('BAD_PAYMENT', 'Платёж не совпадает с товаром');
         await changeCoins(tx, payment.playerId, pack.coins, 'stars_purchase', payment.telegramChargeId);
       } else {
         const [item] = await tx.select().from(items).where(eq(items.id, payment.productId));
-        if (!item || item.priceStars !== payment.stars) throw new AppError('BAD_PAYMENT', 'Платёж не совпадает с товаром');
+        if (!item || item.priceStars !== payment.stars)
+          throw new AppError('BAD_PAYMENT', 'Платёж не совпадает с товаром');
         await tx
           .insert(playerItems)
           .values({ playerId: payment.playerId, itemId: item.id, source: 'stars' })
@@ -120,4 +122,3 @@ export class ShopService {
     });
   }
 }
-
