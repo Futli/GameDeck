@@ -109,6 +109,32 @@ describe('база: игроки, статистика, магазин', () => {
       expect(await players.me(ids[1]!)).toMatchObject({ coins: 0, coinsLost: 500 });
     });
 
+    it('история партий: новые сверху, монеты из журнала, постранично', async () => {
+      const ids = [(await players.register()).playerId, (await players.register()).playerId];
+      const at = (minute: number) => new Date(Date.UTC(2026, 10, 1, 12, minute));
+      for (const [minute, winner, stake] of [
+        [1, 0, 100],
+        [2, 1, 0],
+        [3, 1, 800],
+      ] as const) {
+        await stats.recordMatch({ ...match(ids, winner, stake), finishedAt: at(minute) });
+      }
+
+      const first = await stats.history(ids[0]!, { limit: 2 });
+      expect(first.matches).toMatchObject([
+        // Третья партия: ставка 800, а после первых двух у игрока 600 — отдал всё, что было.
+        { finishedAt: at(3).toISOString(), place: 2, stake: 800, players: 2, coins: -600 },
+        { finishedAt: at(2).toISOString(), place: 2, stake: 0, coins: 0 },
+      ]);
+      expect(first.next).toBe(at(2).toISOString());
+
+      const second = await stats.history(ids[0]!, { limit: 2, before: new Date(first.next!) });
+      expect(second).toEqual({
+        matches: [expect.objectContaining({ place: 1, coins: 100, ratingBefore: 1000, ratingAfter: 1016 })],
+        next: null,
+      });
+    });
+
     it('таблица лидеров отсортирована по рейтингу', async () => {
       const ids = [(await players.register()).playerId, (await players.register()).playerId];
       await stats.recordMatch(match(ids, 1));

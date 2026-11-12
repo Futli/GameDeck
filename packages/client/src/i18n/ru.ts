@@ -52,6 +52,8 @@ export const ru = {
     codeAria: 'Код комнаты',
     password: 'Пароль',
     join: 'Войти',
+    mySkins: 'Мои скины',
+    stats: 'Статистика',
   },
 
   profile: {
@@ -61,6 +63,38 @@ export const ru = {
     stakeCoins: 'монет на ставках',
     wonLost: (won: number, lost: number) => `Выиграно ${won}, проиграно ${lost}`,
     firstGame: 'Сыграйте первую партию — здесь появится статистика',
+  },
+
+  skins: {
+    title: 'Мои скины',
+    back: '← Назад',
+    kinds: { mat: 'Коврик', dice: 'Кубики', cup: 'Стакан' },
+    rarities: { common: 'Обычный', rare: 'Редкий', epic: 'Эпический' },
+    serial: (n: number) => `№ ${n}`,
+    loading: 'Загружаем…',
+    standard: 'Стандартный',
+    playerColor: 'Цвет игрока',
+    equipped: 'Надет',
+    empty: (kind: 'mat' | 'dice' | 'cup') =>
+      `Скинов на ${{ mat: 'коврик', dice: 'кубики', cup: 'стакан' }[kind]} пока нет. Они выпадают в «Кубике удачи» у бота.`,
+  },
+
+  stats: {
+    title: 'Статистика',
+    back: '← Назад',
+    games: 'игр',
+    winsLosses: (rate: number) => `побед / поражений · ${rate}%`,
+    wonLostCoins: 'выиграно / проиграно монет',
+    net: 'итого на ставках',
+    history: 'История партий',
+    loading: 'Загружаем…',
+    empty: 'Сыграйте первую партию — она появится здесь',
+    win: 'Победа',
+    place: (place: number, of: number) => `${place} место из ${of}`,
+    stake: (stake: number) => (stake > 0 ? `ставка ${stake}` : 'без ставки'),
+    rating: (delta: string) => `рейтинг ${delta}`,
+    more: 'Показать ещё',
+    locale: 'ru-RU',
   },
 
   rooms: {

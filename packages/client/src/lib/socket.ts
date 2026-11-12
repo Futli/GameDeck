@@ -60,6 +60,30 @@ function loadProfile(): void {
     .catch(() => {});
 }
 
+/**
+ * Запрос к HTTP API от имени игрока (тот же токен, что и у сокета). Ошибку сервера
+ * показываем внизу экрана и пробрасываем дальше, как в call().
+ */
+export async function http<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: {
+      authorization: `Bearer ${sessionToken ?? ''}`,
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const data = (await response.json().catch(() => null)) as (T & { error?: string; message?: string }) | null;
+  if (!response.ok) {
+    // Нет JSON с кодом — сервер упал или не дошёл запрос: показываем общий текст INTERNAL.
+    const code = data?.error ?? 'INTERNAL';
+    const message = errorText(code, data?.message ?? 'Сервер не ответил, попробуйте ещё раз');
+    setState({ notice: message });
+    throw Object.assign(new Error(message), { code });
+  }
+  return data as T;
+}
+
 socket.on('session', ({ token, playerId }) => {
   try {
     localStorage.setItem(TOKEN_KEY, token);

@@ -190,6 +190,7 @@ await tx.insert(coinTransactions).values({ playerId, amount, balanceAfter: row.c
 | `GET /api/me/inventory`                        | по токену | Баланс, предметы, что надето                                                       |
 | `POST /api/shop/buy` `{ itemId }`              | по токену | Покупка за монеты, в ответе новый инвентарь                                        |
 | `POST /api/me/equip` `{ itemId }`              | по токену | Надеть предмет, в ответе новый инвентарь                                           |
+| `GET /api/me/matches?limit=20&before=<время>`  | по токену | История своих партий: место, ставка, монеты по журналу, рейтинг; страницами        |
 
 «По токену» значит заголовок `Authorization: Bearer <token>`, тот же токен, что приходит в событии `session`:
 
@@ -198,6 +199,11 @@ curl -X POST http://localhost:3000/api/shop/buy \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"itemId":"mat-wood"}'
 ```
+
+История партий собирается из `match_players` + `matches`, а монеты по партии — из журнала
+`coin_transactions` (строки `match_win`/`match_stake` с `ref_id` = id партии). Журнал знает, сколько игрок
+отдал на самом деле: если на ставку не хватало монет, минус будет меньше ставки. Страницы идут по времени:
+в ответе `next` — время последней партии, его передают в `before`, чтобы получить следующие.
 
 Ошибки всегда одной формы: `{ "error": "INSUFFICIENT_COINS", "message": "Недостаточно монет" }`, со статусом 400, 401 или 404.
 

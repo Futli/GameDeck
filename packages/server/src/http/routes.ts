@@ -21,6 +21,10 @@ const itemBodySchema = z.object({ itemId: z.string().min(1) });
 const skinParamsSchema = z.object({ id: z.uuid() });
 const unequipBodySchema = z.object({ kind: z.enum(SKIN_KINDS) });
 const giftBodySchema = z.object({ toPlayerId: z.uuid() });
+const historyQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  before: z.iso.datetime().optional(),
+});
 const leaderboardQuerySchema = z.object({
   game: z.enum(Object.keys(games) as [string, ...string[]]).default('dice-high'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -91,6 +95,13 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
     const profile = await players.me(await requirePlayer(request));
     if (!profile) throw new AppError('PLAYER_NOT_FOUND', 'Игрок не найден');
     return profile;
+  });
+
+  /** История своих партий для экрана статистики: победы, поражения и монеты по каждой. */
+  app.get('/api/me/matches', async (request) => {
+    const playerId = await requirePlayer(request);
+    const { limit, before } = historyQuerySchema.parse(request.query);
+    return stats.history(playerId, { limit, ...(before ? { before: new Date(before) } : {}) });
   });
 
   app.get('/api/leaderboard', async (request) => {

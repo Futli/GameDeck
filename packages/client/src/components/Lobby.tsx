@@ -5,6 +5,8 @@ import { RoomList } from './RoomList';
 import { useClientState } from '../lib/store';
 import { Avatar } from './Avatar';
 import { ProfileStats } from './ProfileCard';
+import { SkinsScreen } from './SkinsScreen';
+import { StatsScreen } from './StatsScreen';
 import { startRoomCode, telegramName, telegramUser } from '../lib/telegram';
 import { useT } from '../i18n';
 import { LanguageSwitch } from './LanguageSwitch';
@@ -28,6 +30,8 @@ export function Lobby() {
   const [newPassword, setNewPassword] = useState('');
   const [gameId, setGameId] = useState(loadGameChoice);
   const [busy, setBusy] = useState(false);
+  /** Главная или один из разделов профиля поверх неё. Набранные имя и код при этом не теряются. */
+  const [screen, setScreen] = useState<'main' | 'skins' | 'stats'>('main');
   const profile = useClientState((s) => s.profile);
   const nameEdited = useRef(false);
   const t = useT();
@@ -67,6 +71,9 @@ export function Lobby() {
     void run(() => api.joinRoom({ code, name, ...(password ? { password } : {}) }));
   };
 
+  if (screen === 'skins') return <SkinsScreen onBack={() => setScreen('main')} />;
+  if (screen === 'stats' && profile) return <StatsScreen profile={profile} onBack={() => setScreen('main')} />;
+
   return (
     <main className="lobby">
       <LanguageSwitch />
@@ -89,7 +96,15 @@ export function Lobby() {
         </div>
       </label>
 
-      {profile && <ProfileStats profile={profile} />}
+      {profile && (
+        <>
+          <ProfileStats profile={profile} />
+          <div className="profile-links">
+            <button onClick={() => setScreen('skins')}>{t.lobby.mySkins}</button>
+            <button onClick={() => setScreen('stats')}>{t.lobby.stats}</button>
+          </div>
+        </>
+      )}
 
       <div className="field">
         <span>{t.lobby.whatToPlay}</span>
@@ -138,7 +153,7 @@ export function Lobby() {
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           maxLength={5}
-          placeholder="K7M2Q"
+          placeholder="*****"
           aria-label={t.lobby.codeAria}
         />
         {needsPassword && (

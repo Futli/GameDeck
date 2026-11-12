@@ -242,6 +242,169 @@ select {
   flex: 1;
   min-width: 0;
 }
+.profile-links {
+  display: flex;
+  gap: 8px;
+}
+.profile-links > button {
+  flex: 1;
+}
+
+/* ─── Разделы профиля: скины и статистика ───────────────── */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+.screen-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.screen-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+.screen-subtitle {
+  margin: 8px 0 0;
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+.up {
+  color: var(--good);
+}
+.down {
+  color: var(--bad);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border-radius: var(--radius);
+}
+.tab {
+  background: transparent;
+  padding: 8px;
+}
+.tab--active {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.tab__count {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.skin-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px;
+  background: var(--surface);
+  border: 2px solid transparent;
+  text-align: center;
+  font-size: 0.9rem;
+}
+.skin-card .muted {
+  font-size: 0.75rem;
+}
+.skin-card:disabled {
+  /* Надетый скин — неактивная кнопка, но не бледная: его надо хорошо видеть. */
+  opacity: 1;
+}
+.skin-card--rare {
+  border-color: #3d6fd8;
+}
+.skin-card--epic {
+  border-color: #a050e0;
+}
+.skin-card--equipped {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.skin-card__badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.skin-card__default {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 2px dashed var(--surface-2);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.skin-preview {
+  image-rendering: pixelated;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+}
+/* Кубик и стакан маленькие (21 и 16 пикселей): во всю карточку они слишком крупные. */
+.skin-preview--dice,
+.skin-preview--cup {
+  padding: 14%;
+}
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--bad);
+}
+.history-row--won {
+  border-left-color: var(--good);
+}
+.history-row__main,
+.history-row__numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.history-row__numbers {
+  align-items: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.history-row .muted {
+  font-size: 0.8rem;
+}
+
 .name-row .avatar {
   flex: none;
   width: 36px;
@@ -274,12 +437,6 @@ select {
   grid-column: 1 / -1;
   justify-content: center;
   font-size: 0.9rem;
-}
-.profile-stats .up {
-  color: var(--good);
-}
-.profile-stats .down {
-  color: var(--bad);
 }
 
 .avatar {

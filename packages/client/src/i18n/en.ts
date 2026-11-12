@@ -41,6 +41,8 @@ export const en: Messages = {
     codeAria: 'Room code',
     password: 'Password',
     join: 'Join',
+    mySkins: 'My skins',
+    stats: 'Stats',
   },
 
   profile: {
@@ -50,6 +52,38 @@ export const en: Messages = {
     stakeCoins: 'coins in stakes',
     wonLost: (won, lost) => `Won ${won}, lost ${lost}`,
     firstGame: 'Play your first game and your stats will show up here',
+  },
+
+  skins: {
+    title: 'My skins',
+    back: '← Back',
+    kinds: { mat: 'Mat', dice: 'Dice', cup: 'Cup' },
+    rarities: { common: 'Common', rare: 'Rare', epic: 'Epic' },
+    serial: (n) => `#${n}`,
+    loading: 'Loading…',
+    standard: 'Standard',
+    playerColor: 'Player color',
+    equipped: 'Equipped',
+    empty: (kind) =>
+      `No ${{ mat: 'mat', dice: 'dice', cup: 'cup' }[kind]} skins yet. They drop in the bot's Lucky Dice.`,
+  },
+
+  stats: {
+    title: 'Stats',
+    back: '← Back',
+    games: 'games',
+    winsLosses: (rate) => `wins / losses · ${rate}%`,
+    wonLostCoins: 'coins won / lost',
+    net: 'net on stakes',
+    history: 'Match history',
+    loading: 'Loading…',
+    empty: 'Play your first game and it will show up here',
+    win: 'Victory',
+    place: (place, of) => `${place} of ${of}`,
+    stake: (stake) => (stake > 0 ? `stake ${stake}` : 'no stake'),
+    rating: (delta) => `rating ${delta}`,
+    more: 'Show more',
+    locale: 'en-GB',
   },
 
   rooms: {
