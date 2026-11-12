@@ -39,6 +39,7 @@ description: Запустить GameDeck (сервер + клиент) лока�
 6. Остановить: `pkill -f "pnpm dev"; pkill -f vite; pkill -f "tsx watch"`.
 
 Заметки:
+
 - Прод-режим: `pnpm build && pnpm start` — один порт :3000, сервер отдаёт собранный клиент.
 - Если сервер пишет `client build not found, serving API only` в dev — это нормально, клиент отдаёт Vite.
 - Вход через Telegram (`initData`) в браузере вне Telegram недоступен; смотреть, как клиент ведёт себя без него.

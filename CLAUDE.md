@@ -1,84 +1,40 @@
-# GameDeck — заметки для Claude
+# GameDeck
 
-Онлайн-комнаты для игр на костях, целевая платформа — Telegram Mini App.
-Монорепо pnpm: `packages/shared` (контракт и правила игр), `packages/server`
-(Fastify + Socket.IO + Drizzle), `packages/client` (Vite + React, чистый CSS).
-Подробные гайды для человека: `docs/server-guide.md`, `docs/database-guide.md`,
-`docs/client-guide.md`, `docs/deploy-guide.md`.
+Онлайн-комнаты для игр на костях, целевая платформа — Telegram Mini App. Этот файл — карта:
+правила и объяснения лежат на страницах, на которые он ссылается. Всё, что может проверить
+программа, проверяет программа (хуки, ESLint, Prettier, knip, CI), а не этот текст.
 
-## Команды
+## Карта
 
-| Что | Команда | Время |
-| --- | --- | --- |
-| Зависимости | `pnpm install --frozen-lockfile` | ~2 с |
-| Типы во всех пакетах | `pnpm typecheck` | ~6 с |
-| Линтер (ESLint) | `pnpm lint`, автоисправление `pnpm lint:fix` | ~2 с |
-| Всё сразу, как в CI | `pnpm check` | ~13 с |
-| Все тесты (Vitest, PGlite в памяти) | `pnpm test` | ~5 с |
-| Один файл тестов | `pnpm exec vitest run packages/server/test/socket.test.ts` | |
-| Dev: сервер :3000 + клиент :5173 | `DATABASE_URL=memory:// pnpm dev` | |
-| Сборка | `pnpm build` | |
-| Миграция после правки `schema.ts` | `pnpm db:generate` | |
+- `packages/shared` — контракт клиент ↔ сервер (`protocol.ts`, `schemas.ts`) и правила игр (`games/`).
+- `packages/server` — Fastify + Socket.IO: комнаты в памяти, игроки, рейтинг, монеты и магазин в Postgres (Drizzle).
+- `packages/client` — Vite + React, чистый CSS.
+- `deploy/` — Docker, Caddy, установщик для Proxmox.
 
-Перед коммитом: `pnpm check` (typecheck + lint + test) — то же самое гоняет CI
-(`.github/workflows/deploy.yml`). Линтер — ESLint 9 flat config (`eslint.config.js`):
-typescript-eslint recommended, `import type` обязателен, react-hooks для клиента.
-Отключать правило можно только точечно `eslint-disable-next-line ... -- причина`.
-Хук PostToolUse (`.claude/hooks/lint-file.cjs`) сам делает `eslint --fix` по каждому
-правленному файлу и возвращает оставшиеся ошибки — их надо исправить сразу.
-
-Чтобы запустить приложение и посмотреть на него глазами — skill `run-gamedeck`
-(`.claude/skills/run-gamedeck/SKILL.md`).
-
-## Как устроено
-
-- **Авторитетный сервер.** Клиент шлёт намерение, сервер проверяет ход, бросает
-  кубики (rng на сервере) и рассылает каждому свой `room:state`.
-- **Протокол** — в `packages/shared/src/protocol.ts`: события с ack
-  `{ ok: true, data } | { ok: false, error: { code } }`. Входящие данные
-  валидируются zod-схемами из `shared/src/schemas.ts`.
-- **Игры — модули** `GameModule` (`shared/src/games/types.ts`): чистые функции без
-  I/O. Новая игра = файл в `shared/src/games/` + строка в реестре
-  `shared/src/games/index.ts` + тест в `shared/test/`. Скрытая информация
-  (кубики под стаканом) режется в `viewFor` — чужие секреты не должны уходить по сети.
-- **Комнаты** живут в памяти (`server/src/rooms`), игроки/рейтинг/монеты/предметы —
-  в PostgreSQL. Без `DATABASE_URL` используется PGlite (`./data/pglite`),
-  `memory://` — база в памяти.
-- **Монеты** меняются только через `changeCoins` с записью в журнал
-  (`server/src/db/wallet.ts`). Монеты виртуальные, без вывода.
-- `@gamedeck/shared` подключается из исходников через условие `source`
-  (vitest, vite, `tsx --conditions=source`), пересобирать shared не нужно.
-
-## Тесты
-
-- Правила игр тестируются как чистые функции с детерминированным `rng`.
-- Сквозные тесты сокетов (`server/test/socket.test.ts`) поднимают настоящий
-  сервер через `buildApp({ db, rng, disconnectGraceMs })` на порту 0 и
-  подключают нескольких клиентов `socket.io-client`. Это и есть способ
-  проверить комнату с N игроками: используй этот шаблон для новых сценариев.
-- Одна PGlite-база на файл (`server/test/helpers.ts`), каждый тест создаёт своих игроков.
-
-## Соглашения
-
-- Язык: комментарии, документация, тексты UI, названия и описания PR — по-русски.
-  Сообщения коммитов — по-английски, в повелительном наклонении.
-- TypeScript strict, ESM (`.js` в путях импортов на сервере).
-- Пользователь изучает проект по шагам: новые подсистемы сопровождать
-  понятным объяснением в `docs/*-guide.md`.
-- Параллельно работают несколько веток/PR. Перед пушем: `git fetch origin main`
-  и слить main в свою ветку, конфликты решать, не теряя чужие изменения.
+| Прочитай                                                                                                                                     | Перед тем как                        |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| [docs/principles.md](docs/principles.md)                                                                                                     | менять поведение продукта            |
+| [docs/practices/working-with-owner.md](docs/practices/working-with-owner.md)                                                                 | браться за любую просьбу             |
+| [docs/practices/code.md](docs/practices/code.md)                                                                                             | писать код или тесты, добавлять игру |
+| [docs/practices/git.md](docs/practices/git.md)                                                                                               | ветку, коммит, пуш или PR            |
+| [docs/server-guide.md](docs/server-guide.md), [docs/database-guide.md](docs/database-guide.md), [docs/client-guide.md](docs/client-guide.md) | работу в соответствующем пакете      |
+| [docs/deploy-guide.md](docs/deploy-guide.md)                                                                                                 | что-либо про сервер и деплой         |
 
 ## Машины
 
-- **TRASHCAN** — локальная машина разработчика (Windows), здесь запускается Claude Code локально.
-  Хуки в `.claude/` пишутся на bash (на Windows их выполняет Git Bash) и вне облака ничего не делают.
-- **Ubuntu-сервер** — боевая сборка для Telegram Mini App.
+- **TRASHCAN** — Windows, локальная разработка и локальный Claude Code. Хуки в `.claude/hooks` на Node,
+  чтобы работать и там, и в облаке.
+- **Ubuntu-сервер** — боевая сборка для Telegram Mini App (game.lyokha.ru). Не трогать без прямой просьбы,
+  `.env` не читать и не коммитить. TLS делает внешний Caddy, 80/443 на контейнер не пробрасывать,
+  базовые образы — с `mirror.gcr.io` (Docker Hub из РФ закрыт).
 
-## Деплой (не трогать без явной просьбы)
+## Команды
 
-- Прод: LXC-контейнер на Proxmox друга в РФ, домен game.lyokha.ru. Установщик —
-  `deploy/proxmox/gamedeck-lxc.sh`, конфиг на сервере — `/opt/gamedeck/deploy/.env`.
-- TLS делает внешний Caddy на хосте; внутренний Caddy в контейнере работает
-  только по http. 80/443 на контейнер не пробрасывать.
-- Docker Hub из РФ недоступен: базовые образы брать с `mirror.gcr.io`.
-- Файлы `.env` не читать и не коммитить, секреты (BOT_TOKEN и т.п.) — только в `.env` на сервере.
+- `DATABASE_URL=memory:// pnpm dev` — сервер :3000 и клиент :5173, база в памяти. Посмотреть глазами — skill `run-gamedeck`.
+- `pnpm fix:format`, `pnpm fix:lint` — привести код к стилю (хук после правки делает это сам по файлу).
+- `pnpm test` или `pnpm exec vitest run <файл>` — тесты; `pnpm db:generate` — миграция после правки `schema.ts`.
+
+## Перед завершением
+
+`pnpm check` — то же, что CI: `check:format`, `check:lint`, `check:ts`, `check:unused` (knip), `test`.
+Полный список шагов — skill `finish`.

@@ -1,8 +1,12 @@
-// PostToolUse-хук: после правки .ts/.tsx/.js/.cjs файла прогоняет по нему `eslint --fix`.
-// Оставшиеся ошибки возвращает Claude (exit 2), чтобы он их сразу исправил.
+// PostToolUse-хук: после правки файла приводит его к стилю репозитория.
+// Prettier форматирует всё, что умеет; ESLint с --fix проверяет код.
+// Оставшиеся ошибки ESLint возвращаются Claude (exit 2), чтобы он их сразу исправил.
 // На Node, чтобы одинаково работало в облаке (Linux) и на TRASHCAN (Windows).
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
+
+const run = (root, bin, args) =>
+  spawnSync(process.execPath, [path.join(root, 'node_modules', ...bin), ...args], { cwd: root, encoding: 'utf8' });
 
 let input = '';
 process.stdin.on('data', (c) => (input += c));
@@ -13,13 +17,15 @@ process.stdin.on('end', () => {
   } catch {
     process.exit(0);
   }
-  if (!file || !/\.(c|m)?[jt]sx?$/.test(file)) process.exit(0);
+  if (!file) process.exit(0);
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const rel = path.relative(root, file);
   if (rel.startsWith('..') || path.isAbsolute(rel) || /(^|[\\/])(node_modules|dist)[\\/]/.test(rel)) process.exit(0);
 
-  const eslint = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
-  const r = spawnSync(process.execPath, [eslint, '--fix', '--no-warn-ignored', rel], { cwd: root, encoding: 'utf8' });
+  run(root, ['prettier', 'bin', 'prettier.cjs'], ['--write', '--ignore-unknown', '--log-level', 'silent', rel]);
+
+  if (!/\.(c|m)?[jt]sx?$/.test(rel)) process.exit(0);
+  const r = run(root, ['eslint', 'bin', 'eslint.js'], ['--fix', '--no-warn-ignored', rel]);
   if (r.status === 1) {
     process.stderr.write(`ESLint нашёл ошибки в ${rel}:\n${r.stdout}`);
     process.exit(2);

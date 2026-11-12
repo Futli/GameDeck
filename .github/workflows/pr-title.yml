@@ -1,0 +1,18 @@
+# Заголовок PR в формате type(scope): описание (см. .github/pr-title.json).
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .github/scripts/pr-title.mjs
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}

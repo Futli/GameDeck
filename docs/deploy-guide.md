@@ -119,7 +119,7 @@ cd deploy && docker compose up -d --build
 
 `.github/workflows/deploy.yml` делает это сам на каждый push в `main`:
 
-1. **test** — `pnpm typecheck` и `pnpm test` (на PR тоже).
+1. **test** — формат, линт, типы, неиспользуемый код и тесты, как `pnpm check` (на PR тоже).
 2. **image** — собирает образ и кладёт в GitHub Container Registry: `ghcr.io/futli/gamedeck:latest` и `:<sha коммита>`.
 3. **deploy** — заходит на сервер по SSH, обновляет `/opt/gamedeck`, скачивает новый образ и перезапускает `app`. Сервер ничего не собирает сам, поэтому обновление занимает секунды и не ест его память.
 
