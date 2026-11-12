@@ -476,13 +476,14 @@ select {
 /* ─── Стол ──────────────────────────────────────────────── */
 
 /*
- * Раскладка: один снизу, два слева, один сверху, два справа.
- * Сетка 3 колонки × 4 ряда; центр стола занимает два средних ряда.
+ * Раскладка зависит от числа игроков (класс table--duel / --cross / --full, см. lib/table.ts).
+ * Пустых мест нет: сетка ровно под тех, кто сидит за столом.
  *
- *   .          top     .
- *   left-high  mid     right-high
- *   left-low   mid     right-low
- *   .          bottom  .
+ *   duel (1–2)     cross (3–4)          full (5–6)
+ *   top            .    top    .        .    top    .
+ *   mid            left mid    right    lh   mid    rh
+ *   bottom         .    bottom .        ll   mid    rl
+ *                                       .    bottom .
  */
 .table {
   position: relative;
@@ -512,6 +513,28 @@ select {
     /* жёсткая «пиксельная» тень стола */ 0 24px 40px #000a; /* мягкая тень под столом */
 }
 
+/* Двое друг напротив друга: стол уже и ниже, боковых колонок нет. */
+.table--duel {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'top'
+    'mid'
+    'bottom';
+  width: min(100%, 340px);
+  margin-inline: auto;
+  min-height: 400px;
+}
+/* Трое-четверо: по одному месту на каждой стороне. */
+.table--cross {
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    '.    top    .'
+    'l    mid    r'
+    '.    bottom .';
+  min-height: 460px;
+}
+
 .seat {
   display: flex;
   flex-direction: column;
@@ -531,6 +554,12 @@ select {
 .seat--top {
   grid-area: top;
 }
+.seat--left {
+  grid-area: l;
+}
+.seat--right {
+  grid-area: r;
+}
 .seat--right-high {
   grid-area: rh;
 }
@@ -539,19 +568,6 @@ select {
 }
 .seat--side {
   justify-content: center;
-}
-
-.seat--empty::before {
-  content: '';
-  width: 128px;
-  height: 96px;
-  border: 2px dashed #ffffff26;
-  border-radius: 4px;
-  background: #0000001a;
-}
-.seat--side.seat--empty::before {
-  width: 96px;
-  height: 128px;
 }
 
 .seat-name {
@@ -661,8 +677,18 @@ select {
   font-size: 1.2rem;
   font-weight: 700;
 }
+/*
+ * Номер раунда — табличка в рамке. Цвета свои, а не из темы: в Telegram --accent бывает синим,
+ * и синий на зелёном сукне не читается.
+ */
 .round {
-  color: var(--accent);
+  padding: 3px 12px;
+  border: 2px solid #f2c94c;
+  border-radius: 6px;
+  background: #0007;
+  color: #ffe08a;
+  font-weight: 700;
+  box-shadow: 0 3px 0 #0006;
 }
 .winner {
   font-size: 1.3rem;
@@ -681,13 +707,17 @@ select {
     padding: 10px 6px;
     border-width: 8px;
   }
-  .mat,
-  .seat--empty::before {
+  .table--duel {
+    min-height: 360px;
+  }
+  .table--cross {
+    min-height: 420px;
+  }
+  .mat {
     width: 104px;
     height: 78px;
   }
-  .seat--side .mat,
-  .seat--side.seat--empty::before {
+  .seat--side .mat {
     width: 78px;
     height: 104px;
   }
