@@ -6,14 +6,13 @@ import {
   type Rng,
   type WidgetDice,
   type WidgetRollBank,
-  type WidgetRollOutcome,
   type WidgetSkinRarity,
 } from '@gamedeck/shared';
-import type { WidgetState } from './build.js';
+import type { WidgetRollAnswer, WidgetState } from './build.js';
 
 /**
- * Игрок прототипа. Живёт в памяти процесса и с настоящим профилем GameDeck
- * не связан: монеты здесь только показываются, в базу ничего не пишется.
+ * Игрок для превью в браузере (preview.ts). Живёт в памяти процесса и с настоящим
+ * профилем не связан. Настоящий бросок с базой и монетами — в widget-service.ts.
  */
 export interface DemoPlayer {
   bank: WidgetRollBank;
@@ -21,25 +20,6 @@ export interface DemoPlayer {
   /** Кубики последнего броска, null — игрок ещё не бросал. */
   dice: WidgetDice | null;
 }
-
-/**
- * Ответ бота на запрос броска — то, что получает виджет из TelegramWidget.request().
- * Имена короткие по той же причине, что и у WidgetState: лимит 1 КБ.
- */
-export type WidgetRollAnswer =
-  | {
-      d: WidgetDice;
-      o: WidgetRollOutcome;
-      /** Сколько монет принёс бросок. */
-      c: number;
-      /** Запас бросков, время следующего и баланс после броска. */
-      r: number;
-      n: number;
-      b: number;
-      /** Что выпало сверх монет, готовой фразой. */
-      x?: string;
-    }
-  | { e: 'NO_ROLLS' };
 
 const SKIN_TEXT: Record<WidgetSkinRarity, string> = {
   common: 'Выпал обычный скин',
@@ -63,7 +43,7 @@ export function demoState(player: DemoPlayer, now: number, intervalSec: number):
     l: 0,
     c: 0,
     ...(player.dice ? { d: player.dice } : {}),
-    p: 'Прототип: монеты ненастоящие',
+    p: 'Превью: монеты ненастоящие',
   };
 }
 

@@ -89,6 +89,18 @@ export class PlayerService {
     return this.register({ telegramId: user.id, displayName: profile.displayName, avatarUrl: profile.avatarUrl });
   }
 
+  /**
+   * Игрок по сообщению боту. Кто пишет, сообщает сам Telegram, поэтому id надёжен так же,
+   * как в проверенной initData. Сессия здесь не нужна: бот отвечает в чат, а не в браузер.
+   * Имя существующего игрока не трогаем: он мог поменять его в игре.
+   */
+  async ensureTelegramPlayer(user: TelegramUser): Promise<string> {
+    const [known] = await this.db.select({ id: players.id }).from(players).where(eq(players.telegramId, user.id));
+    if (known) return known.id;
+    const { playerId } = await this.register({ telegramId: user.id, displayName: displayNameOf(user) });
+    return playerId;
+  }
+
   private async createSession(playerId: string): Promise<string> {
     const token = newToken();
     await this.db.insert(sessions).values({ tokenHash: hashToken(token), playerId });

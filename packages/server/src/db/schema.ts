@@ -122,7 +122,7 @@ export const coinTransactions = pgTable(
     /** Плюс — начисление, минус — списание. */
     amount: bigint('amount', { mode: 'number' }).notNull(),
     balanceAfter: bigint('balance_after', { mode: 'number' }).notNull(),
-    /** stars_purchase | item_purchase | match_win | match_stake | bonus | referral */
+    /** stars_purchase | item_purchase | match_win | match_stake | bonus | referral | widget_roll */
     reason: text('reason').notNull(),
     /** На что ссылается операция: id предмета, партии, платежа. */
     refId: text('ref_id'),
@@ -214,4 +214,28 @@ export const starsPayments = pgTable('stars_payments', {
   /** paid | refunded */
   status: text('status').notNull().default('paid'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─── Виджет Telegram ────────────────────────────────────────────────────────
+
+/**
+ * Состояние игрока в виджете «Кубик удачи»: запас бросков и то, что нужно,
+ * чтобы обновить уже отправленный виджет. Строка появляется при первом обращении к боту.
+ */
+export const widgetPlayers = pgTable('widget_players', {
+  playerId: uuid('player_id')
+    .primaryKey()
+    .references(() => players.id, { onDelete: 'cascade' }),
+  /** Сколько бросков было доступно при последнем пересчёте (см. accrueWidgetRolls). */
+  rolls: smallint('rolls').notNull(),
+  /** Когда придёт следующий бросок; null — запас полон и отсчёт не идёт. */
+  nextAt: timestamp('next_at', { withTimezone: true }),
+  /** Кубики последнего броска, например «3,3,5»: виджет показывает их при открытии. */
+  lastDice: text('last_dice'),
+  /** Выпавшие и ещё не потраченные модификаторы (перебросы). */
+  modifiers: integer('modifiers').notNull().default(0),
+  /** Последнее сообщение с виджетом: по нему бот обновляет состояние через editMessageWidgetData. */
+  chatId: bigint('chat_id', { mode: 'number' }),
+  messageId: integer('message_id'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

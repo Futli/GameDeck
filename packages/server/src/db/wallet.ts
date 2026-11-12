@@ -6,7 +6,8 @@ import { coinTransactions, players } from './schema.js';
 /** Транзакция drizzle: тот же API, что и у Db. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-export type CoinReason = 'stars_purchase' | 'item_purchase' | 'match_win' | 'match_stake' | 'bonus' | 'referral';
+export type CoinReason =
+  'stars_purchase' | 'item_purchase' | 'match_win' | 'match_stake' | 'bonus' | 'referral' | 'widget_roll';
 
 /**
  * Единственный способ изменить баланс. Обновление и проверка «хватает ли денег»

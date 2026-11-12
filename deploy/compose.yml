@@ -34,6 +34,11 @@ services:
       # Вход через Telegram Mini App. Пусто — игра работает только как сайт.
       BOT_TOKEN: ${BOT_TOKEN:-}
       TELEGRAM_APP_URL: ${TELEGRAM_APP_URL:-}
+      # Бот с виджетом «Кубик удачи»: 1 — сервер сам получает сообщения бота.
+      TELEGRAM_BOT_POLLING: ${TELEGRAM_BOT_POLLING:-}
+      # HTTP-прокси до api.telegram.org. Для контейнера xray ниже: http://xray:8118
+      TELEGRAM_PROXY_URL: ${TELEGRAM_PROXY_URL:-}
+      WIDGET_ROLL_INTERVAL_SEC: ${WIDGET_ROLL_INTERVAL_SEC:-10800}
     # Порт наружу не открываем: в интернет смотрит только Caddy.
     expose:
       - '3000'
@@ -55,6 +60,20 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Прокси до Telegram для серверов в России (docs/deploy-guide.md, шаг 8).
+  # Запускается только с COMPOSE_PROFILES=proxy в .env. Порт наружу не открыт:
+  # к прокси может обратиться только app по сети compose.
+  xray:
+    image: ghcr.io/xtls/xray-core:26.10.31
+    profiles: [proxy]
+    restart: unless-stopped
+    command: ['run', '-c', '/etc/xray/config.json']
+    volumes:
+      # Конфиг с ключами от x-ui создаётся на сервере и в git не попадает.
+      - ./xray/config.json:/etc/xray/config.json:ro
+    expose:
+      - '8118'
 
 volumes:
   caddy_data:

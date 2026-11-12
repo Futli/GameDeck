@@ -1,5 +1,12 @@
 import { deflateSync } from 'node:zlib';
-import { diceShades, PLAYER_COLOR_HEX, type DiceStyle, type PlayerColor, type WidgetDice } from '@gamedeck/shared';
+import {
+  diceShades,
+  PLAYER_COLOR_HEX,
+  type DiceStyle,
+  type PlayerColor,
+  type WidgetDice,
+  type WidgetRollOutcome,
+} from '@gamedeck/shared';
 import { assertValidMat, type MatSkin } from './mat.js';
 import { WIDGET_SOURCE } from './source.js';
 
@@ -50,6 +57,25 @@ export interface WidgetState {
   /** Строка про приз недели. */
   p?: string;
 }
+
+/**
+ * Ответ бота на запрос броска — то, что получает виджет из TelegramWidget.request().
+ * Имена короткие по той же причине, что и у WidgetState: лимит 1 КБ.
+ */
+export type WidgetRollAnswer =
+  | {
+      d: WidgetDice;
+      o: WidgetRollOutcome;
+      /** Сколько монет принёс бросок. */
+      c: number;
+      /** Запас бросков, время следующего и баланс после броска. */
+      r: number;
+      n: number;
+      b: number;
+      /** Что выпало сверх монет, готовой фразой. */
+      x?: string;
+    }
+  | { e: 'NO_ROLLS' };
 
 export function measureWidget(html: string): { bytes: number; packed: number } {
   const raw = Buffer.from(html, 'utf8');

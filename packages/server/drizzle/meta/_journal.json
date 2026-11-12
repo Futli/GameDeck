@@ -15,6 +15,13 @@
       "when": 1793422709080,
       "tag": "0001_telegram_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794467537280,
+      "tag": "0002_widget_players",
+      "breakpoints": true
     }
   ]
 }
