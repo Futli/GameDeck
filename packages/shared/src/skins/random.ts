@@ -81,6 +81,6 @@ export function bandTone(value: number, count: number, x: number, y: number): nu
   const scaled = Math.min(Math.max(value, 0), 1) * (count - 1);
   const base = Math.floor(scaled);
   const frac = scaled - base;
-  const step = frac < 0.42 ? 0 : frac > 0.58 ? 1 : (frac - 0.42) / 0.16 > bayer(x, y) ? 1 : 0;
+  const step = frac < 0.47 ? 0 : frac > 0.53 ? 1 : (frac - 0.47) / 0.06 > bayer(x, y) ? 1 : 0;
   return Math.min(count - 1, base + step);
 }

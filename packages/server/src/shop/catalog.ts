@@ -9,7 +9,7 @@ const dice = (face: DiceStyle['face'], pips: DiceStyle['pips']) => JSON.stringif
  * При старте сервер синхронизирует эти строки в таблицы items и coin_packs.
  */
 export const catalogItems: Array<InferInsertModel<typeof items>> = [
-  // Коврики 128×64 — главный «скин» игрока, их видят все за столом.
+  // Коврики 128×96 — главный «скин» игрока, их видят все за столом.
   { id: 'mat-felt', kind: 'mat', name: 'Зелёное сукно', rarity: 'common', asset: 'mats/felt.png', isDefault: true },
   { id: 'mat-wood', kind: 'mat', name: 'Дубовый стол', rarity: 'common', priceCoins: 300, asset: 'mats/wood.png' },
   {

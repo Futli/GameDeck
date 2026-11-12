@@ -7,20 +7,38 @@
  * тему клиента) — её проверяет только настоящий клиент через dev-bot.ts.
  */
 import { createServer } from 'node:http';
-import { DEFAULT_DICE_STYLE, WIDGET_ROLL_INTERVAL_SEC } from '@gamedeck/shared';
+import {
+  DEFAULT_DICE_STYLE,
+  PLAYER_COLOR_HEX,
+  SKIN_RARITIES,
+  WIDGET_ROLL_INTERVAL_SEC,
+  generateSkin,
+  type SkinRarity,
+} from '@gamedeck/shared';
 import { cryptoRng } from '../app.js';
 import { config } from '../config.js';
 import { buildWidgetHtml, encodeWidgetState } from './build.js';
 import { createDemoPlayer, demoState, playDemoRoll } from './demo.js';
-import { feltMat } from './mat.js';
+import { feltMat, matFromSkin } from './mat.js';
 
 const port = Number(process.env.WIDGET_PREVIEW_PORT ?? 5180);
 const intervalSec = Number(process.env.WIDGET_ROLL_INTERVAL_SEC ?? WIDGET_ROLL_INTERVAL_SEC);
 const now = () => Math.floor(Date.now() / 1000);
 
+/**
+ * Сгенерированный коврик вместо сукна: WIDGET_PREVIEW_MAT=epic:12345 (редкость:seed).
+ * Так можно посмотреть любой скин в виджете, не выдавая его игроку.
+ */
+function previewMat() {
+  const [rarity, seed] = (process.env.WIDGET_PREVIEW_MAT ?? '').split(':');
+  if (!SKIN_RARITIES.includes(rarity as SkinRarity) || !seed) return feltMat();
+  const skin = generateSkin({ kind: 'mat', seed: Number(seed), rarity: rarity as SkinRarity });
+  return matFromSkin(skin.render(), PLAYER_COLOR_HEX.red.main);
+}
+
 let player = createDemoPlayer(config.startingCoins);
 const html = buildWidgetHtml(
-  { mat: feltMat(), dice: DEFAULT_DICE_STYLE, cup: 'red' },
+  { mat: previewMat(), dice: DEFAULT_DICE_STYLE, cup: 'red' },
   {
     invite: 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Fexample_bot',
     ad: 'https://t.me/example_bot/play',

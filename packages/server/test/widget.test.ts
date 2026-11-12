@@ -10,7 +10,16 @@ import {
   type WidgetSkins,
 } from '../src/widget/build.js';
 import { createDemoPlayer, demoState, playDemoRoll } from '../src/widget/demo.js';
-import { assertValidMat, countMatRuns, feltMat, matFromSkin, MAT_MAX_RUNS, type MatSkin } from '../src/widget/mat.js';
+import {
+  assertValidMat,
+  countMatRuns,
+  feltMat,
+  matFromSkin,
+  MAT_HEIGHT,
+  MAT_MAX_RUNS,
+  MAT_WIDTH,
+  type MatSkin,
+} from '../src/widget/mat.js';
 
 const skins: WidgetSkins = { mat: feltMat(), dice: DEFAULT_DICE_STYLE, cup: 'red' };
 const links: WidgetLinks = {
@@ -24,7 +33,7 @@ function noisyMat(): MatSkin {
   const palette = Array.from({ length: 16 }, (_, i) => `#${(i * 0x111111).toString(16).padStart(6, '0')}`);
   let seed = 1;
   let pixels = '';
-  while (pixels.length < 128 * 64) {
+  while (pixels.length < MAT_WIDTH * MAT_HEIGHT) {
     seed = (seed * 48271) % 2147483647;
     // Отрезки по 4 пикселя: случайный цвет, но число команд рисования в лимите.
     pixels += (Math.floor(seed / 65536) % 16).toString(16).repeat(4);
@@ -33,12 +42,14 @@ function noisyMat(): MatSkin {
 }
 
 describe('коврик виджета', () => {
-  it('любой сгенерированный коврик влезает в виджет с запасом по отрезкам', () => {
+  it('любой сгенерированный коврик влезает в виджет: по отрезкам и по 4 КБ после сжатия', () => {
     for (const rarity of SKIN_RARITIES)
-      for (let i = 0; i < 200; i++) {
+      for (let i = 0; i < 300; i++) {
         const mat = matFromSkin(generateSkin({ kind: 'mat', seed: i * 7919 + 3, rarity }).render(), '#ff2d3d');
         expect(() => assertValidMat(mat)).not.toThrow();
-        expect(countMatRuns(mat)).toBeLessThan(MAT_MAX_RUNS * 0.95);
+        expect(countMatRuns(mat)).toBeLessThan(MAT_MAX_RUNS * 0.97);
+        const html = buildWidgetHtml({ mat, dice: DEFAULT_DICE_STYLE, cup: 'red' }, links);
+        expect(measureWidget(html).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
       }
   });
 
@@ -56,7 +67,7 @@ describe('коврик виджета', () => {
   });
 
   it('отклоняет слишком пёстрый коврик', () => {
-    const pixels = Array.from({ length: 128 * 64 }, (_, i) => i % 2).join('');
+    const pixels = Array.from({ length: MAT_WIDTH * MAT_HEIGHT }, (_, i) => i % 2).join('');
     expect(() => assertValidMat({ palette: ['#000000', '#ffffff'], pixels })).toThrow(/пёстрый/);
   });
 });

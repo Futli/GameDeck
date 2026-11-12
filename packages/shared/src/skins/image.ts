@@ -35,7 +35,7 @@ export function resolvePalette(image: PixelImage, playerColor: string): string[]
   return image.palette.map((c) => (c === PLAYER_SLOT ? playerColor : c));
 }
 
-/** Повернуть на 90° по часовой: коврик на боковом месте стоит вдоль края стола (64×128). */
+/** Повернуть на 90° по часовой: коврик на боковом месте стоит вдоль края стола (96×128). */
 export function rotate(image: PixelImage): PixelImage {
   const out = createImage(image.height, image.width, image.palette);
   for (let y = 0; y < image.height; y++)

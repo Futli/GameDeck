@@ -7,7 +7,7 @@ import { WidgetService } from './widget/widget-service.js';
 
 // Сначала база (с миграциями), потом приложение: без базы сервер не стартует.
 const database = await openDatabase(config.databaseUrl);
-const { app, players } = await buildApp({
+const { app, players, skins } = await buildApp({
   db: database.db,
   startingCoins: config.startingCoins,
   serveClient: true,
@@ -25,6 +25,7 @@ const bot =
     ? new WidgetBot({
         api: createBotApi(config.telegramBotToken, config.telegramProxyUrl),
         players,
+        skins,
         widget: new WidgetService(database.db, players, cryptoRng, config.widgetRollIntervalSec),
         appUrl: config.telegramAppUrl,
         log: app.log,

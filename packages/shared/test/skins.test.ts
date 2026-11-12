@@ -66,7 +66,7 @@ describe('генератор скинов', () => {
     }
   });
 
-  it('поворот коврика на боковое место: 64×128, углы переходят по часовой', () => {
+  it('поворот коврика на боковое место: 96×128, углы переходят по часовой', () => {
     const image = generateSkin({ kind: 'mat', seed: 7, rarity: 'epic' }).render();
     const turned = rotate(image);
     expect([turned.width, turned.height]).toEqual([MAT_HEIGHT, MAT_WIDTH]);

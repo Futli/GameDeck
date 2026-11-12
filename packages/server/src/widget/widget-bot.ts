@@ -1,9 +1,11 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
+import { PLAYER_COLOR_HEX, generateSkin } from '@gamedeck/shared';
 import type { PlayerService } from '../players/player-service.js';
+import type { SkinService } from '../skins/skin-service.js';
 import { BotApiError, type BotApi } from './bot-api.js';
 import { buildWidgetHtml, encodeWidgetState, type WidgetRollAnswer } from './build.js';
-import { feltMat } from './mat.js';
+import { feltMat, matFromSkin } from './mat.js';
 import type { WidgetService } from './widget-service.js';
 
 const userSchema = z.object({
@@ -38,6 +40,7 @@ type Update = z.infer<typeof updateSchema>;
 interface WidgetBotOptions {
   api: BotApi;
   players: PlayerService;
+  skins: SkinService;
   widget: WidgetService;
   /** Ссылка на Mini App для кнопки «Найти игру»; null — кнопки нет. */
   appUrl: string | null;
@@ -137,16 +140,31 @@ export class WidgetBot {
 
   /** Любое сообщение в личке — прислать виджет с текущим состоянием игрока. */
   private async onMessage(message: NonNullable<Update['message']>): Promise<void> {
-    const { api, players, widget, appUrl } = this.options;
+    const { api, players, skins, widget, appUrl } = this.options;
     if (message.chat.type !== 'private' || !message.from) return;
 
     const playerId = await players.ensureTelegramPlayer(message.from);
     // HTML у отправленного виджета не меняется, поэтому скины подставляются в момент отправки.
-    const html = buildWidgetHtml(
-      { mat: feltMat(), dice: await players.diceStyle(playerId), cup: 'red' },
-      // Реклама и приглашения с наградой ещё не сделаны: кнопка рекламы скрыта, «позвать друга» делится ботом.
-      { invite: this.inviteUrl, ad: null, findGame: appUrl },
-    );
+    // Надетый сгенерированный коврик рисуется тем же генератором, что и на столе; без него — сукно.
+    // Тесты держат любой коврик в 4 КБ виджета, но если генератор когда-нибудь выйдет за лимит,
+    // игрок получит виджет с сукном, а не ошибку.
+    const equipped = await skins.equipped(playerId);
+    const dice = await players.diceStyle(playerId);
+    // Реклама и приглашения с наградой ещё не сделаны: кнопка рекламы скрыта, «позвать друга» делится ботом.
+    const links = { invite: this.inviteUrl, ad: null, findGame: appUrl };
+    let html: string;
+    try {
+      const mat = equipped.mat
+        ? matFromSkin(generateSkin(equipped.mat).render(), PLAYER_COLOR_HEX.red.main)
+        : feltMat();
+      html = buildWidgetHtml({ mat, dice, cup: 'red' }, links);
+    } catch (error) {
+      this.options.log.warn(
+        { err: error, skin: equipped.mat },
+        'skin mat does not fit the widget, falling back to felt',
+      );
+      html = buildWidgetHtml({ mat: feltMat(), dice, cup: 'red' }, links);
+    }
     const sent = await api.call<{ message_id: number }>('sendWidget', {
       chat_id: message.chat.id,
       html,
