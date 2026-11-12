@@ -1,4 +1,4 @@
-import { DEFAULT_DICE_STYLE, DICE_PIP_LAYOUT, type DiceStyle } from '@gamedeck/shared';
+import { DEFAULT_DICE_STYLE, DICE_PIP_LAYOUT, diceShades, type DiceStyle } from '@gamedeck/shared';
 
 /**
  * Пиксельный кубик на сетке 21×21 «пикселя».
@@ -11,13 +11,6 @@ import { DEFAULT_DICE_STYLE, DICE_PIP_LAYOUT, type DiceStyle } from '@gamedeck/s
  */
 const GRID = 21;
 const PIP_CENTERS = [5, 10, 15] as const;
-
-/** Смешать два цвета #rrggbb: t = 0 — первый, t = 1 — второй. */
-function mix(a: string, b: string, t: number): string {
-  const channel = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
-  const out = [0, 1, 2].map((i) => Math.round(channel(a, i) * (1 - t) + channel(b, i) * t));
-  return `#${out.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-}
 
 /** Точка — квадрат 3×3 «пикселя» с центром в пикселе (cx, cy). */
 function Pip({ cx, cy }: { cx: number; cy: number }) {
@@ -32,10 +25,7 @@ interface Props {
 }
 
 export function Die({ value, size = 42, style = DEFAULT_DICE_STYLE }: Props) {
-  const outline = mix(style.face, '#000000', 0.55);
-  const shade = mix(style.face, '#000000', 0.22);
-  const light = mix(style.face, '#ffffff', 0.45);
-  const pipLight = mix(style.pips, '#ffffff', 0.25);
+  const { outline, shade, light, pipLight } = diceShades(style);
   const last = GRID - 1;
 
   return (
