@@ -19,8 +19,22 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1794466219121,
-      "tag": "0002_skins",
+      "when": 1794467532068,
+      "tag": "0002_telegram_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794467935979,
+      "tag": "0003_widget_players",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794470224740,
+      "tag": "0004_skins",
       "breakpoints": true
     }
   ]

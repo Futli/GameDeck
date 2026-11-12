@@ -19,10 +19,14 @@ import { displayNameOf, type TelegramUser } from '../telegram/init-data.js';
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 const newToken = () => randomBytes(24).toString('base64url');
 
+/** Имя новичка по умолчанию (default колонки display_name). */
+const DEFAULT_NAME = 'Игрок';
+
 /** С чем создаётся игрок. Анонимный — со значениями по умолчанию. */
 interface NewPlayer {
   telegramId?: number;
   displayName?: string;
+  telegramName?: string;
   avatarUrl?: string | null;
 }
 
@@ -60,13 +64,25 @@ export class PlayerService {
    * Вход из Telegram. initData уже проверена, поэтому telegram id — надёжный ключ игрока:
    * тот же человек с другого телефона попадёт в тот же профиль.
    *
-   * - Игрок с этим telegram id есть — обновляем имя и аватар, выдаём сессию.
+   * - Игрок с этим telegram id есть — обновляем аватар и, если игрок не менял ник, имя; выдаём сессию.
    * - Нет, но у клиента токен анонимного игрока — привязываем Telegram к нему,
-   *   чтобы не потерять монеты и рейтинг, набранные до входа через Telegram.
-   * - Иначе — новый игрок.
+   *   чтобы не потерять монеты, рейтинг и имя, набранные до входа через Telegram.
+   * - Иначе — новый игрок с ником из Telegram.
    */
   async resolveTelegram(user: TelegramUser, token: unknown): Promise<SessionInfo> {
-    const profile = { displayName: displayNameOf(user), avatarUrl: user.photo_url ?? null, lastSeenAt: new Date() };
+    const telegramName = displayNameOf(user);
+    const profile = {
+      // Ник обновляем, только пока он совпадает с прошлым именем из Telegram (или ещё «Игрок»):
+      // ник, который игрок сменил сам, не трогаем. Telegram-игроки, вошедшие до появления
+      // telegram_name (оно пустое), ник сменить не могли — у них он тоже из Telegram.
+      displayName: sql`case when ${players.displayName} = ${DEFAULT_NAME}
+        or ${players.displayName} = ${players.telegramName}
+        or (${players.telegramId} is not null and ${players.telegramName} is null)
+        then ${telegramName} else ${players.displayName} end`,
+      telegramName,
+      avatarUrl: user.photo_url ?? null,
+      lastSeenAt: new Date(),
+    };
     const tokenOwner = await this.findPlayerId(token);
 
     const [known] = await this.db.select({ id: players.id }).from(players).where(eq(players.telegramId, user.id));
@@ -86,7 +102,25 @@ export class PlayerService {
       if (linked) return { token: token as string, playerId: linked.id };
     }
 
-    return this.register({ telegramId: user.id, displayName: profile.displayName, avatarUrl: profile.avatarUrl });
+    return this.register({
+      telegramId: user.id,
+      displayName: telegramName,
+      telegramName,
+      avatarUrl: profile.avatarUrl,
+    });
+  }
+
+  /**
+   * Игрок по сообщению боту. Кто пишет, сообщает сам Telegram, поэтому id надёжен так же,
+   * как в проверенной initData. Сессия здесь не нужна: бот отвечает в чат, а не в браузер.
+   * Имя существующего игрока не трогаем: он мог поменять его в игре.
+   */
+  async ensureTelegramPlayer(user: TelegramUser): Promise<string> {
+    const [known] = await this.db.select({ id: players.id }).from(players).where(eq(players.telegramId, user.id));
+    if (known) return known.id;
+    const telegramName = displayNameOf(user);
+    const { playerId } = await this.register({ telegramId: user.id, displayName: telegramName, telegramName });
+    return playerId;
   }
 
   private async createSession(playerId: string): Promise<string> {

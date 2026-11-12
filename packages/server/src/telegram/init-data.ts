@@ -86,10 +86,10 @@ export function verifyInitData(raw: string, { botToken, maxAgeSec, now = new Dat
   return { user: user.data, startParam: params.get('start_param'), authDate };
 }
 
-/** Имя для стола: «Имя Фамилия», обрезанное до лимита имени игрока. */
+/** Ник по умолчанию: имя пользователя в Telegram (без @), если его нет — «Имя Фамилия». */
 export function displayNameOf(user: TelegramUser): string {
   const full = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
-  return (full || user.username || 'Игрок').slice(0, 24);
+  return (user.username || full || 'Игрок').slice(0, 24);
 }
 
 /** Подписать initData так же, как это делает Telegram. Нужно тестам и локальной отладке. */

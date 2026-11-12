@@ -54,11 +54,11 @@ export const tg = webApp?.initData ? webApp : null;
 
 export const telegramUser = tg?.initDataUnsafe.user ?? null;
 
-/** Имя по тем же правилам, что и на сервере (displayNameOf). */
+/** Ник по умолчанию по тем же правилам, что и на сервере (displayNameOf): username, иначе имя. */
 export const telegramName = telegramUser
   ? (
-      [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(' ').trim() ||
       telegramUser.username ||
+      [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(' ').trim() ||
       'Игрок'
     ).slice(0, 24)
   : null;
