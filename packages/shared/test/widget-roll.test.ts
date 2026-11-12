@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   accrueWidgetRolls,
   classifyWidgetRoll,
+  rerollWidgetDie,
   rollWidgetDice,
   spendWidgetRoll,
   type WidgetDice,
@@ -77,5 +78,36 @@ describe('запас бросков', () => {
 
   it('без бросков потратить нечего', () => {
     expect(spendWidgetRoll({ rolls: 0, nextAt: 5 * HOUR }, HOUR)).toBeNull();
+  });
+});
+
+describe('переброс кубика модификатором', () => {
+  // Генератор, дающий заданную грань.
+  const face = (value: number) => () => (value - 0.5) / 6;
+
+  it('платит разницу, если стало лучше', () => {
+    // 2-2-5 (пара, 18 монет) → 2-2-2 (тройка, 30 монет).
+    expect(rerollWidgetDie([2, 2, 5], 2, face(2))).toEqual({ dice: [2, 2, 2], outcome: 'triple', gain: 12 });
+  });
+
+  it('ничего не отнимает, если стало хуже', () => {
+    // 6-6-5 (пара, 34 монеты) → 1-6-5 (12 монет): прежний приз остаётся.
+    expect(rerollWidgetDie([6, 6, 5], 0, face(1))).toEqual({ dice: [1, 6, 5], outcome: 'plain', gain: 0 });
+  });
+
+  it('в среднем переброс третьего кубика при паре добавляет меньше одного броска', () => {
+    let total = 0;
+    for (let pair = 1; pair <= 6; pair++)
+      for (let third = 1; third <= 6; third++) {
+        if (third === pair) continue;
+        for (let value = 1; value <= 6; value++) total += rerollWidgetDie([pair, pair, third], 2, face(value)).gain;
+      }
+    const average = total / (6 * 5 * 6);
+    expect(average).toBeGreaterThan(3);
+    expect(average).toBeLessThan(16.04);
+  });
+
+  it('отклоняет номер кубика вне 0–2', () => {
+    expect(() => rerollWidgetDie([1, 2, 3], 3, face(1))).toThrow(RangeError);
   });
 });

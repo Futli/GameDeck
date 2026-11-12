@@ -52,6 +52,7 @@ button:disabled{opacity:.5}
 <div><span class=h>Попытки</span><br><b id=r></b> <span class=h id=n></span></div>
 <div><span class=h>Баланс</span><br><b id=b></b></div>
 <div class=h id=s></div>
+<button class=q id=k></button>
 <button class=q id=i>Позвать друга</button>
 <button class=q id=a>+1 за рекламу</button>
 </div>
@@ -59,13 +60,13 @@ button:disabled{opacity:.5}
 <div class=h id=z></div>
 </div>
 <script>
-// G — скины и ссылки от сервера, S — состояние из chatData, B — идёт ли бросок.
-var W=window.TelegramWidget,G=__CFG__,S={},B=0,
+// G — скины и ссылки от сервера, S — состояние из chatData, B — идёт ли бросок,
+// P — игрок нажал «Переброс» и выбирает кубик.
+var W=window.TelegramWidget,G=__CFG__,S={},B=0,P=0,
 $=function(i){return document.getElementById(i)},
 T=$('t'),
-// Тексты для ошибок: коды Telegram и наш NO_ROLLS.
-E={NO_ROLLS:'Попытки закончились',RATE_LIMITED:'Слишком часто, подожди пару секунд',TIMEOUT:'Сервер не ответил, попробуй ещё раз'},
-M={plain:'',pair:'Пара, ×2! ',straight:'Стрит! ',triple:'Тройка, ×5! '},
+// Тексты для ошибок: коды Telegram и наш NO_ROLLS. На NO_MOD хватает общего текста: кнопка переброса и так выключена, когда он недоступен.
+E={NO_ROLLS:'Попытки закончились',RATE_LIMITED:'Слишком часто',TIMEOUT:'Сервер не ответил'},
 // Точки на грани: для каждого значения — номера ячеек сетки 3×3 (ряд*3+колонка).
 L=['','4','08','048','0268','02468','036258'];
 // Рисовалка «пикселей»: один пиксель скина — k×k пикселей canvas.
@@ -83,25 +84,34 @@ function tm(s){s=Math.max(0,s|0);var h=s/3600|0,m=s%3600/60|0;return h?h+' ч '+
 function say(t){$('o').textContent=t}
 function load(){try{S=JSON.parse(W.chatData)||{}}catch(e){S={}}if(S.d)dice(S.d)}
 // Показать состояние. Таймер досчитывается на месте, но решает всё равно сервер при броске.
-function show(){var n=Date.now()/1e3;
+function show(){var n=Date.now()/1e3,k=$('k');
 while(S.r<3&&S.n&&S.n<=n){S.r++;S.n=S.r<3?S.n+S.t:0}
-$('r').textContent=(S.r|0)+' из 3';
+// Бонусные броски (S.a) идут сверх трёх по таймеру.
+$('r').textContent=(S.r|0)+' из 3'+(S.a?' +'+S.a:'');
 $('n').textContent=S.r<3&&S.n?'ещё через '+tm(S.n-n):'';
 $('b').textContent=(S.b|0)+' монет';
 $('s').textContent=(S.w|0)+' побед · '+(S.l|0)+' поражений · выиграно '+(S.c|0);
-$('g').disabled=B||!(S.r>0);
+$('g').disabled=B||!(S.r>0||S.a>0);
+// Переброс виден, только когда он есть, и нажимается, только когда его можно применить.
+k.style.display=S.m>0?'':'none';k.textContent='Переброс: '+S.m;k.disabled=B||!S.u;
 $('z').textContent=S.p||''}
 // Ответ на бросок пришёл (или не пришёл): открыть кубики и сказать, что выпало.
+// Фразу про приз (o.x) целиком составляет сервер: текст в виджете стоит байтов лимита.
 function done(o){B=0;T.className='';
-if(o.e)say(E[o.e]||'Не получилось, попробуй ещё раз');
-else{dice(o.d);S.r=o.r;S.n=o.n;S.b=o.b;say(M[o.o]+'+'+o.c+' монет'+(o.x?'. '+o.x:''));W.HapticFeedback.notificationOccurred('success')}
+if(o.e)say(E[o.e]||'Не получилось');
+else{dice(o.d);'rnbamu'.split('').forEach(function(k){S[k]=o[k]});say(o.x);W.HapticFeedback.notificationOccurred('success')}
 show()}
-// Бросок: стакан трясётся не меньше 0,7 с, даже если сервер ответил быстрее.
-$('g').onclick=function(){if(B)return;B=1;T.className='s';say('');show();var t=Date.now();
-W.request('r').then(function(a){var o;try{o=JSON.parse(a.result)}catch(e){o={e:'FAILED'}}
-setTimeout(function(){done(o)},Math.max(0,700-(Date.now()-t)))},function(e){done({e:e.code})})};
-// Кнопки-ссылки. Если ссылки нет, кнопка не показывается.
-[['i',G.u.i],['a',G.u.a],['f',G.u.f]].forEach(function(q){var e=$(q[0]);if(q[1])e.onclick=function(){W.openTelegramLink(q[1])};else e.style.display='none'});
+// Запрос боту: «r» — бросок, «m0»–«m2» — переброс кубика. Стакан трясётся не меньше 0,7 с,
+// даже если сервер ответил быстрее. request() можно звать только из обработчика нажатия.
+function go(q){if(B)return;B=1;P=0;T.className='s';say('');show();var t=Date.now();
+W.request(q).then(function(a){var o;try{o=JSON.parse(a.result)}catch(e){o={e:'FAILED'}}
+setTimeout(function(){done(o)},Math.max(0,700-(Date.now()-t)))},function(e){done({e:e.code})})}
+$('g').onclick=function(){go('r')};
+// Переброс в два нажатия: сначала кнопка, потом кубик. Холст кубиков шириной 81px, по 27px на кубик.
+$('k').onclick=function(){P=!P;say(P?'Выберите кубик':'')};
+$('d').onclick=function(e){if(P)go('m'+(e.offsetX/27|0))};
+// Кнопки-ссылки: id кнопки совпадает с ключом ссылки в G.u. Если ссылки нет, кнопка не показывается.
+'iaf'.split('').forEach(function(k){var e=$(k),u=G.u[k];if(u)e.onclick=function(){W.openTelegramLink(u)};else e.style.display='none'});
 W.onEvent('chatDataChanged',function(){load();show()});
 setInterval(show,1e3);
 mat();cup();dice([1,2,3]);load();show();W.ready();

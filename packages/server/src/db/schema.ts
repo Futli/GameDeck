@@ -240,6 +240,14 @@ export const widgetPlayers = pgTable('widget_players', {
   lastDice: text('last_dice'),
   /** Выпавшие и ещё не потраченные модификаторы (перебросы). */
   modifiers: integer('modifiers').notNull().default(0),
+  /** К последнему броску уже применили модификатор: на один бросок — один модификатор. */
+  lastRollModified: boolean('last_roll_modified').notNull().default(false),
+  /** Броски сверх запаса по таймеру: награды за друзей. Тратятся после обычных и не сгорают. */
+  bonusRolls: integer('bonus_rolls').notNull().default(0),
+  /** Кто пригласил игрока по реферальной ссылке. */
+  referredBy: uuid('referred_by').references(() => players.id, { onDelete: 'set null' }),
+  /** Когда за приглашение выдана награда (после первого броска друга); null — ещё не выдана. */
+  referralRewardedAt: timestamp('referral_rewarded_at', { withTimezone: true }),
   /** Последнее сообщение с виджетом: по нему бот обновляет состояние через editMessageWidgetData. */
   chatId: bigint('chat_id', { mode: 'number' }),
   messageId: integer('message_id'),

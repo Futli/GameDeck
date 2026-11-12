@@ -114,3 +114,27 @@ export function spendWidgetRoll(
   // Отсчёт до следующего броска начинается, когда запас перестал быть полным.
   return { rolls: bank.rolls - 1, nextAt: bank.nextAt ?? now + intervalSec };
 }
+
+/** Что дал переброс одного кубика модификатором. */
+export interface WidgetReroll {
+  dice: WidgetDice;
+  /** Событие по новым кубикам: виджет называет его игроку. */
+  outcome: WidgetRollOutcome;
+  /** Сколько монет добавил переброс; 0 — стало не лучше, прежний приз остаётся. */
+  gain: number;
+}
+
+/**
+ * Перебросить один кубик последнего броска (index — 0, 1 или 2).
+ *
+ * Переброс может только улучшить приз: игрок получает разницу, если новая комбинация
+ * дороже, и ничего не теряет, если дешевле. И он меняет только монеты: скин и новый
+ * модификатор определяются первым результатом броска. Модификаторы продаются за Stars,
+ * а скины — на рынке, поэтому шанс на скин нельзя ни купить, ни усилить.
+ */
+export function rerollWidgetDie(dice: WidgetDice, index: number, rng: Rng): WidgetReroll {
+  if (!Number.isInteger(index) || index < 0 || index > 2) throw new RangeError('Номер кубика — 0, 1 или 2');
+  const rerolled = dice.map((value, i) => (i === index ? rollD6(rng) : value)) as unknown as WidgetDice;
+  const after = classifyWidgetRoll(rerolled);
+  return { dice: rerolled, outcome: after.outcome, gain: Math.max(0, after.coins - classifyWidgetRoll(dice).coins) };
+}

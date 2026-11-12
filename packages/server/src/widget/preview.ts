@@ -1,10 +1,11 @@
 /**
  * Превью виджета в обычном браузере, без Telegram и без бота. Страница — тот же
  * HTML, что уйдёт в Telegram, плюс подмена window.TelegramWidget: запрос броска
- * идёт на этот же локальный сервер, а он отвечает теми же правилами, что и бот.
+ * идёт на этот же локальный сервер, а он отвечает тем же WidgetService, что и бот,
+ * только с базой в памяти и одним игроком.
  *
  * Превью показывает вёрстку и логику, но не среду Telegram (QuickJS, лимиты,
- * тему клиента) — её проверяет только настоящий клиент через dev-bot.ts.
+ * тему клиента) — её проверяет только настоящий клиент.
  */
 import { createServer } from 'node:http';
 import {
@@ -17,9 +18,13 @@ import {
 } from '@gamedeck/shared';
 import { cryptoRng } from '../app.js';
 import { config } from '../config.js';
+import { openDatabase } from '../db/client.js';
+import { widgetPlayers } from '../db/schema.js';
+import { PlayerService } from '../players/player-service.js';
+import { ShopService } from '../shop/shop-service.js';
 import { buildWidgetHtml, encodeWidgetState } from './build.js';
-import { createDemoPlayer, demoState, playDemoRoll } from './demo.js';
 import { feltMat, matFromSkin } from './mat.js';
+import { WidgetService } from './widget-service.js';
 
 const port = Number(process.env.WIDGET_PREVIEW_PORT ?? 5180);
 const intervalSec = Number(process.env.WIDGET_ROLL_INTERVAL_SEC ?? WIDGET_ROLL_INTERVAL_SEC);
@@ -36,7 +41,16 @@ function previewMat() {
   return matFromSkin(skin.render(), PLAYER_COLOR_HEX.red.main);
 }
 
-let player = createDemoPlayer(config.startingCoins);
+// Настоящий сервис бросков на базе в памяти: превью не расходится с ботом в правилах.
+const { db } = await openDatabase('memory://');
+await new ShopService(db).syncCatalog();
+const players = new PlayerService(db, config.startingCoins);
+const widget = new WidgetService(db, players, cryptoRng, intervalSec);
+const { playerId } = await players.register();
+// WIDGET_PREVIEW_MODIFIERS=3 — выдать перебросы, чтобы не ждать стрита.
+const modifiers = Number(process.env.WIDGET_PREVIEW_MODIFIERS ?? 0);
+if (modifiers > 0) await db.insert(widgetPlayers).values({ playerId, rolls: 3, modifiers });
+
 const html = buildWidgetHtml(
   { mat: previewMat(), dice: DEFAULT_DICE_STYLE, cup: 'red' },
   {
@@ -59,8 +73,8 @@ HapticFeedback:{notificationOccurred:function(){}},
 ready:function(){}}})();
 </script>`;
 
-function page(): string {
-  const state = JSON.stringify(encodeWidgetState(demoState(player, now(), intervalSec)));
+async function page(): Promise<string> {
+  const state = JSON.stringify(encodeWidgetState(await widget.state(playerId, now())));
   // Пузырь сообщения на телефоне шириной около 340 px — в нём и показываем.
   return (
     '<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">' +
@@ -72,19 +86,24 @@ function page(): string {
 }
 
 createServer((request, response) => {
-  const url = new URL(request.url ?? '/', 'http://localhost');
-  if (url.pathname === '/query') {
-    const result = playDemoRoll(player, now(), cryptoRng, intervalSec);
-    player = result.player;
-    response.setHeader('content-type', 'application/json');
-    response.end(
-      JSON.stringify({
-        result: JSON.stringify(result.answer),
-        chatData: encodeWidgetState(demoState(player, now(), intervalSec)),
-      }),
-    );
-    return;
-  }
-  response.setHeader('content-type', 'text/html; charset=utf-8');
-  response.end(page());
+  void (async () => {
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    if (url.pathname === '/query') {
+      const data = url.searchParams.get('d') ?? '';
+      const reroll = /^m([0-2])$/.exec(data);
+      const answer = reroll
+        ? await widget.reroll(playerId, Number(reroll[1]), now())
+        : await widget.roll(playerId, now());
+      response.setHeader('content-type', 'application/json');
+      response.end(
+        JSON.stringify({
+          result: JSON.stringify(answer),
+          chatData: encodeWidgetState(await widget.state(playerId, now())),
+        }),
+      );
+      return;
+    }
+    response.setHeader('content-type', 'text/html; charset=utf-8');
+    response.end(await page());
+  })();
 }).listen(port, '127.0.0.1', () => console.log(`Превью виджета: http://localhost:${port}`));
