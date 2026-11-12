@@ -29,6 +29,9 @@ echo "Обновляю до $target"
 git reset --hard --quiet "$target"
 cd deploy
 APP_IMAGE="$IMAGE:$target" docker compose pull --quiet app
+# Та же версия под меткой latest: её берут команды compose, запущенные руками без APP_IMAGE.
+# Без этого ручной `docker compose up -d` вернул бы приложение на старый локальный latest.
+docker tag "$IMAGE:$target" "$IMAGE:latest"
 APP_IMAGE="$IMAGE:$target" docker compose up -d --no-build --remove-orphans
 
 # Новая версия должна ответить на проверку здоровья. Коммит записывается только после этого:
