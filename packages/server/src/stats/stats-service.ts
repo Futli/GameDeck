@@ -1,7 +1,7 @@
-import type { MatchRecord } from '@gamedeck/shared';
-import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
+import type { MatchHistoryPage, MatchRecord } from '@gamedeck/shared';
+import { and, desc, eq, gt, inArray, lt, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { matchPlayers, matches, playerGameStats, players } from '../db/schema.js';
+import { coinTransactions, matchPlayers, matches, playerGameStats, players } from '../db/schema.js';
 import { changeCoins, type Tx } from '../db/wallet.js';
 import type { MatchResult } from '../rooms/room.js';
 import { multiplayerElo } from './elo.js';
@@ -84,6 +84,44 @@ export class StatsService {
         })),
       };
     });
+  }
+
+  /**
+   * История партий игрока, новые сверху, страницами по limit. Монеты берём из журнала
+   * (match_win / match_stake со ссылкой на партию), а не пересчитываем по ставке:
+   * журнал знает, сколько игрок отдал на самом деле, если монет не хватало.
+   */
+  async history(
+    playerId: string,
+    { limit = 20, before }: { limit?: number; before?: Date } = {},
+  ): Promise<MatchHistoryPage> {
+    const coins = sql<number>`coalesce((
+      select sum(${coinTransactions.amount}) from ${coinTransactions}
+      where ${coinTransactions.playerId} = ${matchPlayers.playerId}
+        and ${coinTransactions.refId} = ${matches.id}::text
+        and ${coinTransactions.reason} in ('match_win', 'match_stake')
+    ), 0)::int`;
+    const seated = sql<number>`(select count(*) from ${matchPlayers} mp where mp.match_id = ${matches.id})::int`;
+    const rows = await this.db
+      .select({
+        matchId: matches.id,
+        gameId: matches.gameId,
+        finishedAt: matches.finishedAt,
+        stake: matches.stake,
+        place: matchPlayers.place,
+        players: seated,
+        ratingBefore: matchPlayers.ratingBefore,
+        ratingAfter: matchPlayers.ratingAfter,
+        coins,
+      })
+      .from(matchPlayers)
+      .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+      .where(and(eq(matchPlayers.playerId, playerId), before ? lt(matches.finishedAt, before) : undefined))
+      .orderBy(desc(matches.finishedAt))
+      // Берём на одну строку больше: так узнаём, есть ли следующая страница.
+      .limit(limit + 1);
+    const page = rows.slice(0, limit).map((r) => ({ ...r, finishedAt: r.finishedAt.toISOString() }));
+    return { matches: page, next: rows.length > limit ? page[page.length - 1]!.finishedAt : null };
   }
 
   async leaderboard(gameId: string, limit = 20) {
