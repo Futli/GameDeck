@@ -6,6 +6,7 @@ import type { SkinService } from '../skins/skin-service.js';
 import { BotApiError, type BotApi } from './bot-api.js';
 import { buildWidgetHtml, encodeWidgetState, type WidgetRollAnswer } from './build.js';
 import { feltMat, matFromSkin } from './mat.js';
+import { botLang, BOT_TEXTS } from './texts.js';
 import { referralCode, type WidgetService } from './widget-service.js';
 
 const userSchema = z.object({
@@ -13,6 +14,8 @@ const userSchema = z.object({
   first_name: z.string(),
   last_name: z.string().optional(),
   username: z.string().optional(),
+  /** Язык приложения Telegram у игрока: на нём бот подписывает виджет и пишет итог броска. */
+  language_code: z.string().optional(),
 });
 
 /** Из обновления Telegram берём только то, что нужно боту; остальные поля zod отбрасывает. */
@@ -150,6 +153,7 @@ export class WidgetBot {
     if (message.chat.type !== 'private' || !message.from) return;
 
     const playerId = await players.ensureTelegramPlayer(message.from);
+    const lang = botLang(message.from.language_code);
     // Переход по реферальной ссылке приходит как «/start ref_…».
     const startParam = /^\/start\s+(\S+)/.exec(message.text ?? '')?.[1];
     if (startParam) await widget.setReferrer(playerId, startParam);
@@ -173,19 +177,19 @@ export class WidgetBot {
       const mat = equipped.mat
         ? matFromSkin(generateSkin(equipped.mat).render(), PLAYER_COLOR_HEX.red.main)
         : feltMat();
-      html = buildWidgetHtml({ mat, dice, cup: 'red' }, links);
+      html = buildWidgetHtml({ mat, dice, cup: 'red' }, links, lang);
     } catch (error) {
       this.options.log.warn(
         { err: error, skin: equipped.mat },
         'skin mat does not fit the widget, falling back to felt',
       );
-      html = buildWidgetHtml({ mat: feltMat(), dice, cup: 'red' }, links);
+      html = buildWidgetHtml({ mat: feltMat(), dice, cup: 'red' }, links, lang);
     }
     const sent = await api.call<{ message_id: number }>('sendWidget', {
       chat_id: message.chat.id,
       html,
       // Подпись видна в списке чатов и в приложениях без поддержки виджетов.
-      caption: 'Кубик удачи: бросьте кубики и заберите монеты.',
+      caption: BOT_TEXTS[lang].caption,
       allow_queries: true,
       chat_data: encodeWidgetState(await widget.state(playerId, this.now())),
     });
@@ -196,13 +200,14 @@ export class WidgetBot {
   private async onWidgetQuery(query: NonNullable<Update['widget_query']>): Promise<void> {
     const { api, players, widget } = this.options;
     const playerId = await players.ensureTelegramPlayer(query.from);
+    const lang = botLang(query.from.language_code);
 
     let answer: WidgetRollAnswer | { e: 'FAILED' } = { e: 'FAILED' };
     try {
       // «r» — бросок, «m0»–«m2» — переброс кубика с этим номером.
       const reroll = /^m([0-2])$/.exec(query.data);
-      if (query.data === 'r') answer = await widget.roll(playerId, this.now());
-      else if (reroll) answer = await widget.reroll(playerId, Number(reroll[1]), this.now());
+      if (query.data === 'r') answer = await widget.roll(playerId, this.now(), lang);
+      else if (reroll) answer = await widget.reroll(playerId, Number(reroll[1]), this.now(), lang);
     } finally {
       await api.call('answerWidgetQuery', { widget_query_id: query.id, data: JSON.stringify(answer) });
     }

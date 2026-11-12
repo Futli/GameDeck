@@ -1,8 +1,10 @@
 import type React from 'react';
-import { PLAYER_COLOR_HEX, games, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
+import { PLAYER_COLOR_HEX, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
 import { isSidePosition, seatLayout, tableSize } from '../lib/table';
 import { skinImageUrl } from '../lib/skins';
+import { useT } from '../i18n';
 import { Avatar } from './Avatar';
+import { gameTitle } from './GamePicker';
 import { Die } from './Die';
 import { PerudoCenter } from './perudo/PerudoCenter';
 import { PerudoMat } from './perudo/PerudoMat';
@@ -27,6 +29,7 @@ function visibleRolls(state: DiceHighState | undefined): Record<string, number> 
  * сколько людей в комнате (`lib/table.ts`). Свой коврик всегда снизу. Центр стола — информация о партии.
  */
 export function Table({ room, myId, lastMatch, onKick }: Props) {
+  const t = useT();
   const game = room.game;
   // У каждой игры своё состояние: стол знает, как нарисовать коврик и центр для каждой.
   const state = game?.gameId === 'dice-high' ? (game.state as DiceHighState) : undefined;
@@ -83,9 +86,9 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
             </div>
             <div className="seat-name">
               {player.avatarUrl && <Avatar url={player.avatarUrl} name={player.name} />}
-              {player.isHost && <span title="Хост">♛ </span>}
+              {player.isHost && <span title={t.table.host}>♛ </span>}
               {player.name}
-              {player.id === myId && <span className="muted"> (вы)</span>}
+              {player.id === myId && <span className="muted"> {t.table.you}</span>}
               {delta !== null && (
                 <span className={delta >= 0 ? 'delta up' : 'delta down'}>
                   {' '}
@@ -97,12 +100,12 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
                 <span className={change.coins > 0 ? 'delta up' : 'delta down'}>
                   {' '}
                   {change.coins > 0 ? '+' : ''}
-                  {change.coins} мон.
+                  {t.table.coins(change.coins)}
                 </span>
               )}
             </div>
             {onKick && player.id !== myId && (
-              <button className="kick" onClick={() => onKick(player.id)} title="Исключить">
+              <button className="kick" onClick={() => onKick(player.id)} title={t.table.kick}>
                 ✕
               </button>
             )}
@@ -111,21 +114,17 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
       })}
 
       <div className="table-center">
-        <div className="game-title">{games[room.settings.gameId]?.title ?? room.settings.gameId}</div>
+        <div className="game-title">{gameTitle(room.settings.gameId, t)}</div>
         {room.status === 'lobby' && (
-          <div className="muted">
-            Ждём игроков: {room.players.length}/{room.settings.maxPlayers}
-          </div>
+          <div className="muted">{t.table.waiting(room.players.length, room.settings.maxPlayers)}</div>
         )}
-        {room.status === 'playing' && game && !state && !perudo && (
-          <div className="muted">Интерфейс этой игры ещё в работе</div>
-        )}
+        {room.status === 'playing' && game && !state && !perudo && <div className="muted">{t.table.notReady}</div>}
         {room.status !== 'lobby' && perudo && <PerudoCenter view={perudo} nameOf={nameOf} />}
         {room.status === 'playing' && state && (
           <>
-            {state.round > 1 && <div className="round">Переброс, раунд {state.round}</div>}
+            {state.round > 1 && <div className="round">{t.table.reroll(state.round)}</div>}
             <div>
-              Ходит: <b>{nameOf(game!.currentPlayerId)}</b>
+              {t.table.turn} <b>{nameOf(game!.currentPlayerId)}</b>
             </div>
           </>
         )}
@@ -134,7 +133,7 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
             🏆 <b>{nameOf(game.winnerId)}</b>
           </div>
         )}
-        {room.settings.stake > 0 && <div className="muted">Ставка: {room.settings.stake}</div>}
+        {room.settings.stake > 0 && <div className="muted">{t.table.stake(room.settings.stake)}</div>}
       </div>
     </div>
   );

@@ -8,6 +8,8 @@ import { ProfileStats } from './ProfileCard';
 import { SkinsScreen } from './SkinsScreen';
 import { StatsScreen } from './StatsScreen';
 import { startRoomCode, telegramName, telegramUser } from '../lib/telegram';
+import { useT } from '../i18n';
+import { LanguageSwitch } from './LanguageSwitch';
 
 const NAME_KEY = 'gamedeck.name';
 
@@ -32,6 +34,7 @@ export function Lobby() {
   const [screen, setScreen] = useState<'main' | 'skins' | 'stats'>('main');
   const profile = useClientState((s) => s.profile);
   const nameEdited = useRef(false);
+  const t = useT();
 
   // Профиль пришёл с сервера — подставляем сохранённое имя, если игрок ещё ничего не вводил.
   // В Telegram это либо ник из Telegram, либо ник, который игрок сменил сам.
@@ -73,11 +76,12 @@ export function Lobby() {
 
   return (
     <main className="lobby">
+      <LanguageSwitch />
       <h1 className="logo">GameDeck</h1>
-      <p className="muted">Кости с друзьями в реальном времени</p>
+      <p className="muted">{t.lobby.tagline}</p>
 
       <label className="field">
-        <span>Ваше имя</span>
+        <span>{t.lobby.yourName}</span>
         <div className="name-row">
           {telegramUser && <Avatar url={telegramUser.photo_url} name={name} />}
           <input
@@ -87,7 +91,7 @@ export function Lobby() {
               setName(e.target.value);
             }}
             maxLength={24}
-            placeholder="Например, Лёха"
+            placeholder={t.lobby.namePlaceholder}
           />
         </div>
       </label>
@@ -96,14 +100,14 @@ export function Lobby() {
         <>
           <ProfileStats profile={profile} />
           <div className="profile-links">
-            <button onClick={() => setScreen('skins')}>Мои скины</button>
-            <button onClick={() => setScreen('stats')}>Статистика</button>
+            <button onClick={() => setScreen('skins')}>{t.lobby.mySkins}</button>
+            <button onClick={() => setScreen('stats')}>{t.lobby.stats}</button>
           </div>
         </>
       )}
 
       <div className="field">
-        <span>Во что играем</span>
+        <span>{t.lobby.whatToPlay}</span>
         <GamePicker
           value={gameId}
           onChange={(id) => {
@@ -114,13 +118,13 @@ export function Lobby() {
       </div>
 
       <label className="field">
-        <span>Пароль комнаты (необязательно)</span>
+        <span>{t.lobby.roomPassword}</span>
         <input
           type="password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           maxLength={32}
-          placeholder="Без пароля — комната открыта всем"
+          placeholder={t.lobby.roomPasswordPlaceholder}
         />
       </label>
 
@@ -131,7 +135,7 @@ export function Lobby() {
           run(() => api.createRoom({ name, settings: { gameId, ...(newPassword ? { password: newPassword } : {}) } }))
         }
       >
-        Создать комнату
+        {t.lobby.create}
       </button>
 
       <RoomList
@@ -141,7 +145,7 @@ export function Lobby() {
         }
       />
 
-      <div className="divider">или войти по коду</div>
+      <div className="divider">{t.lobby.joinByCode}</div>
 
       <form className="join" onSubmit={join}>
         <input
@@ -150,12 +154,17 @@ export function Lobby() {
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           maxLength={5}
           placeholder="*****"
-          aria-label="Код комнаты"
+          aria-label={t.lobby.codeAria}
         />
         {needsPassword && (
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль" />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={t.lobby.password}
+          />
         )}
-        <button disabled={busy || !name.trim() || code.length !== 5}>Войти</button>
+        <button disabled={busy || !name.trim() || code.length !== 5}>{t.lobby.join}</button>
       </form>
     </main>
   );

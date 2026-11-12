@@ -1,19 +1,21 @@
 import type { PerudoView } from '@gamedeck/shared';
 import { Die } from '../Die';
-import { bidText, shownReveal } from './view';
+import { useT } from '../../i18n';
+import { shownReveal } from './view';
 
 /** Центр стола в перудо: раунд, действующая ставка, итог последнего вскрытия. */
 export function PerudoCenter({ view, nameOf }: { view: PerudoView; nameOf: (id: string | null) => string }) {
   const bid = view.bids.at(-1);
   const reveal = shownReveal(view);
+  const t = useT();
 
   return (
     <>
       <div className="round">
-        Раунд {view.round}
-        {view.palifico && !view.winnerId && <span className="pd-palifico"> · палифико</span>}
+        {t.perudo.round(view.round)}
+        {view.palifico && !view.winnerId && <span className="pd-palifico"> · {t.perudo.palifico}</span>}
       </div>
-      <div className="muted">На столе {view.totalDice} куб.</div>
+      <div className="muted">{t.perudo.diceOnTable(view.totalDice)}</div>
 
       {bid && (
         <div className="pd-bid">
@@ -26,30 +28,30 @@ export function PerudoCenter({ view, nameOf }: { view: PerudoView; nameOf: (id: 
       {reveal && (
         <div className="pd-reveal">
           <div>
-            <b>{nameOf(reveal.callerId)}</b>: {reveal.call === 'dudo' ? '«Не верю!»' : '«Точно!»'}
+            <b>{nameOf(reveal.callerId)}</b>: {reveal.call === 'dudo' ? t.perudo.dudo : t.perudo.calza}
           </div>
           <div className="muted">
-            Ставка {bidText(reveal.bid.quantity, reveal.bid.face)}, нашлось {reveal.actual}
+            {t.perudo.revealed(t.perudo.bidText(reveal.bid.quantity, reveal.bid.face), reveal.actual)}
           </div>
           <div>
             {reveal.loserId && (
               <>
-                Кубик теряет <b>{nameOf(reveal.loserId)}</b>
+                {t.perudo.loses} <b>{nameOf(reveal.loserId)}</b>
               </>
             )}
             {reveal.gainerId && (
               <>
-                Кубик получает <b>{nameOf(reveal.gainerId)}</b>
+                {t.perudo.gains} <b>{nameOf(reveal.gainerId)}</b>
               </>
             )}
-            {!reveal.loserId && !reveal.gainerId && 'Никто не теряет кубик'}
+            {!reveal.loserId && !reveal.gainerId && t.perudo.nobodyLoses}
           </div>
         </div>
       )}
 
       {!view.winnerId && view.turnId && (
         <div>
-          Ходит: <b>{nameOf(view.turnId)}</b>
+          {t.table.turn} <b>{nameOf(view.turnId)}</b>
         </div>
       )}
     </>

@@ -1,5 +1,6 @@
 import { DEFAULT_DICE_STYLE, DICE_PIP_LAYOUT, diceShades, type DiceStyle, type SkinSeed } from '@gamedeck/shared';
 import { skinImageUrl } from '../lib/skins';
+import { useT } from '../i18n';
 
 /**
  * Пиксельный кубик на сетке 21×21 «пикселя».
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export function Die({ value, size = 42, style = DEFAULT_DICE_STYLE, skin }: Props) {
+  const t = useT();
   if (skin)
     return (
       <img
@@ -35,7 +37,7 @@ export function Die({ value, size = 42, style = DEFAULT_DICE_STYLE, skin }: Prop
         src={skinImageUrl(skin, { value, playerColor: '#000000' })}
         width={size}
         height={size}
-        alt={`Выпало ${value}`}
+        alt={t.table.rolled(value)}
       />
     );
 
@@ -50,7 +52,7 @@ export function Die({ value, size = 42, style = DEFAULT_DICE_STYLE, skin }: Prop
       viewBox={`0 0 ${GRID} ${GRID}`}
       shapeRendering="crispEdges"
       role="img"
-      aria-label={`Выпало ${value}`}
+      aria-label={t.table.rolled(value)}
     >
       {/* Обводка со срезанными углами */}
       <rect x={1} y={0} width={GRID - 2} height={GRID} fill={outline} />

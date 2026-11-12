@@ -1,10 +1,8 @@
 import { PLAYER_COLOR_HEX, SKIN_KINDS, type SkinKind, type SkinView } from '@gamedeck/shared';
 import { useEffect, useState } from 'react';
+import { useT } from '../i18n';
 import { http } from '../lib/socket';
 import { skinImageUrl } from '../lib/skins';
-
-const KIND_TITLES: Record<SkinKind, string> = { mat: 'Коврик', dice: 'Кубики', cup: 'Стакан' };
-const RARITY_TITLES: Record<SkinView['rarity'], string> = { common: 'Обычный', rare: 'Редкий', epic: 'Эпический' };
 
 /**
  * Цвет игрока на превью (нитка коврика, ободок стакана). За столом он свой у каждого,
@@ -32,6 +30,7 @@ export function SkinsScreen({ onBack }: { onBack: () => void }) {
   const [skins, setSkins] = useState<SkinView[] | null>(null);
   const [kind, setKind] = useState<SkinKind>('mat');
   const [busy, setBusy] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     http<{ skins: SkinView[] }>('/api/me/skins')
@@ -57,9 +56,9 @@ export function SkinsScreen({ onBack }: { onBack: () => void }) {
     <main className="screen">
       <header className="screen-header">
         <button className="ghost" onClick={onBack}>
-          ← Назад
+          {t.skins.back}
         </button>
-        <h2>Мои скины</h2>
+        <h2>{t.skins.title}</h2>
       </header>
 
       <div className="tabs" role="tablist">
@@ -71,14 +70,14 @@ export function SkinsScreen({ onBack }: { onBack: () => void }) {
             className={k === kind ? 'tab tab--active' : 'tab'}
             onClick={() => setKind(k)}
           >
-            {KIND_TITLES[k]}
+            {t.skins.kinds[k]}
             <span className="tab__count">{skins?.filter((s) => s.kind === k).length ?? ''}</span>
           </button>
         ))}
       </div>
 
       {skins === null ? (
-        <p className="muted center">Загружаем…</p>
+        <p className="muted center">{t.skins.loading}</p>
       ) : (
         <div className="skin-grid">
           <button
@@ -86,9 +85,9 @@ export function SkinsScreen({ onBack }: { onBack: () => void }) {
             disabled={busy || !equipped}
             onClick={() => change(() => http('/api/me/skins/unequip', { kind }))}
           >
-            <span className="skin-card__default">Цвет игрока</span>
-            <b>Стандартный</b>
-            {!equipped && <span className="skin-card__badge">Надет</span>}
+            <span className="skin-card__default">{t.skins.playerColor}</span>
+            <b>{t.skins.standard}</b>
+            {!equipped && <span className="skin-card__badge">{t.skins.equipped}</span>}
           </button>
           {ofKind.map((skin) => (
             <button
@@ -100,19 +99,15 @@ export function SkinsScreen({ onBack }: { onBack: () => void }) {
               <SkinPreview skin={skin} />
               <b>{skin.name}</b>
               <span className="muted">
-                {RARITY_TITLES[skin.rarity]} · № {skin.serial}
+                {t.skins.rarities[skin.rarity]} · {t.skins.serial(skin.serial)}
               </span>
-              {skin.equipped && <span className="skin-card__badge">Надет</span>}
+              {skin.equipped && <span className="skin-card__badge">{t.skins.equipped}</span>}
             </button>
           ))}
         </div>
       )}
 
-      {skins !== null && ofKind.length === 0 && (
-        <p className="muted center">
-          Скинов на {KIND_TITLES[kind].toLowerCase()} пока нет. Они выпадают в «Кубике удачи» у бота.
-        </p>
-      )}
+      {skins !== null && ofKind.length === 0 && <p className="muted center">{t.skins.empty(kind)}</p>}
     </main>
   );
 }

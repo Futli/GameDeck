@@ -1,15 +1,18 @@
-import { games, type MatchHistoryEntry, type MatchHistoryPage, type MyProfile } from '@gamedeck/shared';
+import type { MatchHistoryEntry, MatchHistoryPage, MyProfile } from '@gamedeck/shared';
 import { useEffect, useState } from 'react';
+import { useT } from '../i18n';
+import { gameTitle } from './GamePicker';
 import { http } from '../lib/socket';
 
 const PAGE = 20;
 
-const dateFormat = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
+const formatDate = (iso: string, locale: string) =>
+  new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(
+    new Date(iso),
+  );
+
+/** Знак всегда виден: +16, −10. */
+const signed = (n: number) => (n >= 0 ? `+${n}` : `−${-n}`);
 
 /** +120 / −50 / 0 с цветом: зелёный — заработал, красный — потерял. */
 function Coins({ value }: { value: number }) {
@@ -18,22 +21,23 @@ function Coins({ value }: { value: number }) {
 }
 
 function MatchRow({ match }: { match: MatchHistoryEntry }) {
+  const t = useT();
   const won = match.place === 1;
   const rating = match.ratingAfter - match.ratingBefore;
   return (
     <li className={won ? 'history-row history-row--won' : 'history-row'}>
       <div className="history-row__main">
-        <b>{won ? 'Победа' : `${match.place} место из ${match.players}`}</b>
+        <b>{won ? t.stats.win : t.stats.place(match.place, match.players)}</b>
         <span className="muted">
-          {games[match.gameId]?.title ?? match.gameId} · {dateFormat.format(new Date(match.finishedAt))}
+          {gameTitle(match.gameId, t)} · {formatDate(match.finishedAt, t.stats.locale)}
         </span>
       </div>
       <div className="history-row__numbers">
         <b>
           <Coins value={match.coins} />
         </b>
-        <span className="muted">{match.stake > 0 ? `ставка ${match.stake}` : 'без ставки'}</span>
-        <span className="muted">рейтинг {rating >= 0 ? `+${rating}` : `−${-rating}`}</span>
+        <span className="muted">{t.stats.stake(match.stake)}</span>
+        <span className="muted">{t.stats.rating(signed(rating))}</span>
       </div>
     </li>
   );
@@ -48,6 +52,7 @@ export function StatsScreen({ profile, onBack }: { profile: MyProfile; onBack: (
   const [matches, setMatches] = useState<MatchHistoryEntry[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const t = useT();
 
   const load = async (before: string | null) => {
     setLoading(true);
@@ -75,41 +80,41 @@ export function StatsScreen({ profile, onBack }: { profile: MyProfile; onBack: (
     <main className="screen">
       <header className="screen-header">
         <button className="ghost" onClick={onBack}>
-          ← Назад
+          {t.stats.back}
         </button>
-        <h2>Статистика</h2>
+        <h2>{t.stats.title}</h2>
       </header>
 
       <div className="profile-stats">
         <div className="stat">
           <b>{profile.gamesPlayed}</b>
-          <span>игр</span>
+          <span>{t.stats.games}</span>
         </div>
         <div className="stat">
           <b>
             <span className="up">{profile.wins}</span> / <span className="down">{losses}</span>
           </b>
-          <span>побед / поражений · {winRate}%</span>
+          <span>{t.stats.winsLosses(winRate)}</span>
         </div>
         <div className="stat">
           <b>
             <span className="up">+{profile.coinsWon}</span> / <span className="down">−{profile.coinsLost}</span>
           </b>
-          <span>выиграно / проиграно монет</span>
+          <span>{t.stats.wonLostCoins}</span>
         </div>
         <div className="stat">
           <b>
             <Coins value={net} />
           </b>
-          <span>итого на ставках</span>
+          <span>{t.stats.net}</span>
         </div>
       </div>
 
-      <h3 className="screen-subtitle">История партий</h3>
+      <h3 className="screen-subtitle">{t.stats.history}</h3>
       {matches === null ? (
-        <p className="muted center">Загружаем…</p>
+        <p className="muted center">{t.stats.loading}</p>
       ) : matches.length === 0 ? (
-        <p className="muted center">Сыграйте первую партию — она появится здесь</p>
+        <p className="muted center">{t.stats.empty}</p>
       ) : (
         <ul className="history">
           {matches.map((m) => (
@@ -119,7 +124,7 @@ export function StatsScreen({ profile, onBack }: { profile: MyProfile; onBack: (
       )}
       {next && (
         <button disabled={loading} onClick={() => load(next)}>
-          Показать ещё
+          {t.stats.more}
         </button>
       )}
     </main>
