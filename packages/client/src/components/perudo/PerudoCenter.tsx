@@ -47,7 +47,8 @@ export function PerudoCenter({ view, nameOf }: { view: PerudoView; nameOf: (id: 
         </div>
       )}
 
-      {!view.winnerId && view.turnId && (
+      {!view.winnerId && view.phase === 'roll' && <div>Все бросают кубики</div>}
+      {!view.winnerId && view.phase === 'bid' && view.turnId && (
         <div>
           Ходит: <b>{nameOf(view.turnId)}</b>
         </div>

@@ -109,15 +109,18 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     if (deadline === null) return;
     roomTimers.set(
       room.code,
-      setTimeout(() => {
-        roomTimers.delete(room.code);
-        if (rooms.get(room.code) !== room) return; // комнату уже удалили
-        for (const id of rooms.expire(room, rng)) {
-          io.in(playerChannel(id)).socketsLeave(roomChannel(room.code));
-          io.to(playerChannel(id)).emit('room:kicked', { code: room.code, reason: 'timeout' });
-        }
-        broadcast(room.isEmpty ? undefined : room);
-      }, Math.max(0, deadline - Date.now())),
+      setTimeout(
+        () => {
+          roomTimers.delete(room.code);
+          if (rooms.get(room.code) !== room) return; // комнату уже удалили
+          for (const id of rooms.expire(room, rng)) {
+            io.in(playerChannel(id)).socketsLeave(roomChannel(room.code));
+            io.to(playerChannel(id)).emit('room:kicked', { code: room.code, reason: 'timeout' });
+          }
+          broadcast(room.isEmpty ? undefined : room);
+        },
+        Math.max(0, deadline - Date.now()),
+      ),
     );
   };
 
