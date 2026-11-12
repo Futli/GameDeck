@@ -167,6 +167,32 @@ export interface MatchRecord {
 }
 
 /**
+ * Строка истории партий игрока (GET /api/me/matches): чем кончилась партия
+ * и сколько монет она принесла или забрала.
+ */
+export interface MatchHistoryEntry {
+  matchId: string;
+  gameId: string;
+  finishedAt: string;
+  /** Ставка партии; 0 — играли без ставки. */
+  stake: number;
+  /** 1 — победа. */
+  place: number;
+  /** Сколько игроков было за столом. */
+  players: number;
+  ratingBefore: number;
+  ratingAfter: number;
+  /** Изменение баланса по этой партии: + выигрыш, − проигранная ставка, 0 — без ставки. */
+  coins: number;
+}
+
+/** Страница истории: next — finishedAt последней строки для следующего запроса; null — дальше пусто. */
+export interface MatchHistoryPage {
+  matches: MatchHistoryEntry[];
+  next: string | null;
+}
+
+/**
  * Профиль текущего игрока для главного экрана (GET /api/me).
  * Счётчики суммируются по всем играм; новичок получает нули.
  */

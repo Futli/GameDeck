@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/socket';
 import { Die } from '../Die';
 import { useT } from '../../i18n';
+import { Hint } from '../tutorial/Coach';
 import { shownReveal } from './view';
 
 const ignore = () => {};
@@ -99,6 +100,7 @@ export function PerudoControls({
               </button>
             ))}
           </div>
+          <Hint id="faces" />
           <div className="pd-stepper">
             <button type="button" disabled={busy || quantity <= 1} onClick={() => setQuantity(quantity - 1)}>
               −
@@ -112,6 +114,7 @@ export function PerudoControls({
               +
             </button>
           </div>
+          <Hint id="quantity" />
           <button
             className="primary big"
             disabled={busy || !valid}
@@ -119,6 +122,7 @@ export function PerudoControls({
           >
             {t.perudo.bid(t.perudo.bidText(quantity, face))}
           </button>
+          <Hint id="bid" />
           {prev && (
             <div className="pd-calls">
               <button className="pd-dudo" disabled={busy} onClick={() => send({ type: 'dudo' })}>
@@ -133,6 +137,8 @@ export function PerudoControls({
               </button>
             </div>
           )}
+          {prev && <Hint id="dudo" />}
+          {prev && !view.maputo && <Hint id="calza" />}
           {view.maputo && <p className="muted center">{t.perudo.maputoRules(prev !== null)}</p>}
         </>
       ) : (

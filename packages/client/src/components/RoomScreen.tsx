@@ -11,6 +11,7 @@ import { TimerBar } from './TimerBar';
 import { PerudoControls } from './perudo/PerudoControls';
 import { perudoView } from './perudo/view';
 import { Table } from './Table';
+import { Coach, Hint, TutorialToggle } from './tutorial/Coach';
 
 const ignore = () => {};
 
@@ -49,10 +50,15 @@ export function RoomScreen({ room }: { room: RoomView }) {
         <button className="ghost" onClick={() => void api.leaveRoom().catch(ignore)}>
           {t.room.leave}
         </button>
+        <TutorialToggle />
         <button className="code" onClick={() => void copyInvite()} title={t.room.invite}>
           {room.code} {copied ? '✓' : tg && telegramAppUrl ? '↗' : '⧉'}
         </button>
       </header>
+      <div className="hint-row">
+        <Hint id="leave" />
+        <Hint id="invite" />
+      </div>
 
       <Table
         room={room}
@@ -60,6 +66,9 @@ export function RoomScreen({ room }: { room: RoomView }) {
         lastMatch={lastMatch}
         onKick={canEdit ? (id) => void api.kick(id).catch(ignore) : undefined}
       />
+
+      {/* Пока открыто окно комнаты ожидания или броска, подсказка обучения пряталась бы под ним. */}
+      {!rolling && !(room.readyCheck && room.status !== 'playing') && <Coach room={room} myId={myId} />}
 
       <div className="actions">
         {room.status === 'playing' && room.game?.currentPlayerId && (
@@ -75,6 +84,7 @@ export function RoomScreen({ room }: { room: RoomView }) {
             {t.room.roll}
           </button>
         )}
+        {myTurn && room.game?.gameId === 'dice-high' && <Hint id="roll" />}
         {isHost && room.status !== 'playing' && !room.readyCheck && (
           <button
             className="primary big"
@@ -84,6 +94,7 @@ export function RoomScreen({ room }: { room: RoomView }) {
             {t.room.start}
           </button>
         )}
+        {isHost && room.status !== 'playing' && !room.readyCheck && <Hint id="start" />}
         {!isHost && room.status !== 'playing' && !room.readyCheck && <p className="muted">{t.room.hostWillStart}</p>}
       </div>
 
