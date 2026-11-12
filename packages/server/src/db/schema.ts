@@ -26,6 +26,11 @@ export const players = pgTable(
     /** Telegram user id. Заполняется при входе из Mini App (проверенная initData). */
     telegramId: bigint('telegram_id', { mode: 'number' }).unique(),
     displayName: text('display_name').notNull().default('Игрок'),
+    /**
+     * Имя из Telegram, которое мы подставили в display_name при последнем входе.
+     * Совпадает с display_name — игрок имя не менял, и его можно обновить из Telegram.
+     */
+    telegramName: text('telegram_name'),
     /** Аватар из Telegram (photo_url). Обновляется при каждом входе. */
     avatarUrl: text('avatar_url'),
     /** Баланс виртуальных монет. Меняется только вместе с записью в coin_transactions. */

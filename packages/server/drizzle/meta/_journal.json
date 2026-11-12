@@ -19,8 +19,15 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1794467537280,
-      "tag": "0002_widget_players",
+      "when": 1794467532068,
+      "tag": "0002_telegram_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794467935979,
+      "tag": "0003_widget_players",
       "breakpoints": true
     }
   ]

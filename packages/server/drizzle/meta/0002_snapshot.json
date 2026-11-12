@@ -1,5 +1,5 @@
 {
-  "id": "a595a4c7-7f66-4aa8-ad60-2494fd512968",
+  "id": "26a9d3d5-1e75-4f72-8254-09b2eb737861",
   "prevId": "c65289db-afc4-4bb8-92cd-3df2e8848b8e",
   "version": "7",
   "dialect": "postgresql",
@@ -673,6 +673,12 @@
           "notNull": true,
           "default": "'Игрок'"
         },
+        "telegram_name": {
+          "name": "telegram_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "avatar_url": {
           "name": "avatar_url",
           "type": "text",
@@ -866,83 +872,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.widget_players": {
-      "name": "widget_players",
-      "schema": "",
-      "columns": {
-        "player_id": {
-          "name": "player_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "rolls": {
-          "name": "rolls",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "next_at": {
-          "name": "next_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_dice": {
-          "name": "last_dice",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "modifiers": {
-          "name": "modifiers",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "chat_id": {
-          "name": "chat_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "message_id": {
-          "name": "message_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "widget_players_player_id_players_id_fk": {
-          "name": "widget_players_player_id_players_id_fk",
-          "tableFrom": "widget_players",
-          "tableTo": "players",
-          "columnsFrom": [
-            "player_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
