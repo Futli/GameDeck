@@ -20,6 +20,8 @@ export interface PlayerView {
   color: PlayerColor;
   /** Скин кубиков: надетый предмет из магазина (слот dice). */
   dice: DiceStyle;
+  /** Аватар из Telegram; null — игрок из браузера или Telegram не отдал фото. */
+  avatarUrl: string | null;
   isHost: boolean;
   connected: boolean;
 }
@@ -51,6 +53,21 @@ export interface RoomView {
   game: GameView | null;
 }
 
+/**
+ * Комната в списке на главной. Только публичное: без игроков по именам,
+ * без состояния игры и, конечно, без пароля.
+ */
+export interface RoomSummary {
+  code: string;
+  status: RoomStatus;
+  gameId: string;
+  stake: number;
+  hasPassword: boolean;
+  hostName: string;
+  players: number;
+  maxPlayers: number;
+}
+
 /** Ответ сервера на любой запрос клиента (Socket.IO acknowledgement). */
 export type AckResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } };
 export type Ack<T> = (result: AckResult<T>) => void;
@@ -68,6 +85,9 @@ export interface ClientToServerEvents {
   'room:settings': (input: UpdateSettingsInput, ack: Ack<RoomView>) => void;
   'room:kick': (input: KickInput, ack: Ack<RoomView>) => void;
   'room:color': (input: ColorInput, ack: Ack<RoomView>) => void;
+  /** Подписаться на список комнат (главная). Ответ — текущий список, дальше приходит rooms:list. */
+  'rooms:watch': (ack: Ack<RoomSummary[]>) => void;
+  'rooms:unwatch': (ack: Ack<null>) => void;
   'game:start': (ack: Ack<RoomView>) => void;
   'game:move': (input: MoveInput, ack: Ack<RoomView>) => void;
 }
@@ -76,6 +96,8 @@ export interface ServerToClientEvents {
   session: (session: SessionInfo) => void;
   'room:state': (room: RoomView) => void;
   'room:kicked': (info: { code: string }) => void;
+  /** Список комнат изменился. Приходит только тем, кто подписан через rooms:watch. */
+  'rooms:list': (rooms: RoomSummary[]) => void;
   /** Партия сохранена в базе: места и изменение рейтинга у каждого. */
   'match:recorded': (result: MatchRecord) => void;
 }
@@ -83,7 +105,32 @@ export interface ServerToClientEvents {
 export interface MatchRecord {
   matchId: string;
   gameId: string;
-  players: Array<{ playerId: string; place: number; ratingBefore: number; ratingAfter: number }>;
+  players: Array<{
+    playerId: string;
+    place: number;
+    ratingBefore: number;
+    ratingAfter: number;
+    /** Сколько монет игрок получил (+) или отдал (−) по ставке этой партии. */
+    coins: number;
+  }>;
+}
+
+/**
+ * Профиль текущего игрока для главного экрана (GET /api/me).
+ * Счётчики суммируются по всем играм; новичок получает нули.
+ */
+export interface MyProfile {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  /** Текущий баланс монет. */
+  coins: number;
+  gamesPlayed: number;
+  wins: number;
+  /** Всего выиграно монет на ставках. */
+  coinsWon: number;
+  /** Всего проиграно монет на ставках (положительное число). */
+  coinsLost: number;
 }
 
 /** Данные, которые Socket.IO хранит на каждом сокете (socket.data). */

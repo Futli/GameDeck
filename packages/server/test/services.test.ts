@@ -21,10 +21,10 @@ describe('база: игроки, статистика, магазин', () => {
     await shop.syncCatalog();
   });
 
-  const match = (ids: string[], winnerIndex = 0) => ({
+  const match = (ids: string[], winnerIndex = 0, stake = 0) => ({
     gameId: 'dice-high',
     roomCode: 'TEST1',
-    stake: 0,
+    stake,
     winnerId: ids[winnerIndex]!,
     startedAt: new Date(),
     finishedAt: new Date(),
@@ -60,8 +60,8 @@ describe('база: игроки, статистика, магазин', () => {
 
       const record = await stats.recordMatch(match([a, b]));
       expect(record.players).toEqual([
-        { playerId: a, place: 1, ratingBefore: 1000, ratingAfter: 1016 },
-        { playerId: b, place: 2, ratingBefore: 1000, ratingAfter: 984 },
+        { playerId: a, place: 1, ratingBefore: 1000, ratingAfter: 1016, coins: 0 },
+        { playerId: b, place: 2, ratingBefore: 1000, ratingAfter: 984, coins: 0 },
       ]);
 
       await stats.recordMatch(match([a, b], 1));
@@ -69,6 +69,44 @@ describe('база: игроки, статистика, магазин', () => {
       expect(profile?.displayName).toBe('Алиса');
       expect(profile?.stats).toMatchObject([{ gameId: 'dice-high', gamesPlayed: 2, wins: 1, peakRating: 1016 }]);
       expect(profile?.recentMatches).toHaveLength(2);
+    });
+
+    it('новичок видит пустую статистику и стартовый баланс', async () => {
+      const { playerId } = await players.register();
+      await players.rename(playerId, 'Новенький');
+      expect(await players.me(playerId)).toMatchObject({
+        id: playerId,
+        displayName: 'Новенький',
+        coins: 500,
+        gamesPlayed: 0,
+        wins: 0,
+        coinsWon: 0,
+        coinsLost: 0,
+      });
+    });
+
+    it('ставка: проигравшие платят, победитель забирает банк, профиль считает итоги', async () => {
+      const ids = [
+        (await players.register()).playerId,
+        (await players.register()).playerId,
+        (await players.register()).playerId,
+      ];
+      const [a, b, c] = ids as [string, string, string];
+
+      const record = await stats.recordMatch(match(ids, 0, 100));
+      expect(record.players.map((p) => p.coins)).toEqual([200, -100, -100]);
+      await stats.recordMatch(match(ids, 1, 50));
+
+      expect(await players.me(a)).toMatchObject({ coins: 650, gamesPlayed: 2, wins: 1, coinsWon: 200, coinsLost: 50 });
+      expect(await players.me(b)).toMatchObject({ coins: 500, gamesPlayed: 2, wins: 1, coinsWon: 100, coinsLost: 100 });
+      expect(await players.me(c)).toMatchObject({ coins: 350, gamesPlayed: 2, wins: 0, coinsWon: 0, coinsLost: 150 });
+    });
+
+    it('ставка больше баланса: проигравший отдаёт сколько есть, в минус не уходит', async () => {
+      const ids = [(await players.register()).playerId, (await players.register()).playerId];
+      const record = await stats.recordMatch(match(ids, 0, 800));
+      expect(record.players.map((p) => p.coins)).toEqual([500, -500]);
+      expect(await players.me(ids[1]!)).toMatchObject({ coins: 0, coinsLost: 500 });
     });
 
     it('таблица лидеров отсортирована по рейтингу', async () => {

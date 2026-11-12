@@ -40,6 +40,17 @@ Telegram / браузер ──HTTPS──▶ Caddy :443 ──HTTP──▶ ap
 - **Нужен белый IP.** Если сервер за домашним роутером, пробросьте на него порты 80 и 443 (TCP, для HTTP/3 ещё 443/UDP), а для автодеплоя ещё и SSH.
 - **Блокировка Telegram игре не мешает.** Mini App грузится с телефона игрока напрямую с нашего сервера. Доступ к `api.telegram.org` понадобится только боту (платежи Stars), и из РФ его придётся пускать через прокси.
 
+### За внешним reverse proxy
+
+Если 80/443 на роутере уже ведут на другой Caddy или nginx, который обслуживает несколько сайтов, то HTTPS делает он. Порты на контейнер GameDeck пробрасывать нельзя, иначе остальные сайты перестанут открываться. Тогда в `deploy/.env`:
+
+```bash
+DOMAIN=game.example.com
+SITE_ADDRESS=:80     # внутренний Caddy слушает только http
+```
+
+Внешний прокси направляет домен на `http://<IP контейнера>:80`, для Caddy это `game.example.com { reverse_proxy 192.168.1.100:80 }`. WebSocket он проксирует сам. Без `SITE_ADDRESS=:80` внутренний Caddy начнёт перенаправлять на https и получать сертификат, и запросы пойдут по кругу.
+
 ### Proxmox: всё одной командой
 
 Если сервер работает на Proxmox VE, шаги 3–4 делает скрипт `deploy/proxmox/gamedeck-lxc.sh`. Запуск в shell хоста PVE от root:
@@ -102,9 +113,10 @@ docker compose logs -f app              # логи сервера
 ## Шаг 5. Подключить к Telegram
 
 1. В [@BotFather](https://t.me/BotFather): `/newbot`, затем `/newapp` (или Bot Settings → Configure Mini App) и указать `https://ваш-домен`.
-2. Открыть бота в Telegram и запустить приложение.
+2. В `deploy/.env` добавить `BOT_TOKEN` (токен бота) и `TELEGRAM_APP_URL` (`https://t.me/<бот>/<short name>`), затем `docker compose up -d`.
+3. Открыть бота в Telegram и запустить приложение: имя и аватар подтянутся сами.
 
-Платежи Stars и проверка `initData` от Telegram — отдельная задача: бота в коде пока нет.
+Как это устроено и как проверить: [telegram-guide.md](telegram-guide.md). Платежи Stars — отдельная задача.
 
 ## Шаг 6. Обновление
 

@@ -36,6 +36,8 @@ export interface PerudoReveal {
   call: 'dudo' | 'calza';
   callerId: string;
   bid: PerudoBid;
+  /** Раунд был палифико: единицы не считались джокерами. */
+  palifico: boolean;
   dice: Record<string, number[]>;
   /** Сколько кубиков нужного номинала нашлось (с учётом джокеров). */
   actual: number;
@@ -166,7 +168,17 @@ function resolveRound(state: PerudoState, callerId: string, call: 'dudo' | 'calz
   if (loserId) counts[loserId]! -= 1;
   if (gainerId) counts[gainerId] = Math.min(PERUDO_START_DICE, counts[gainerId]! + 1);
 
-  const reveal: PerudoReveal = { round: state.round, call, callerId, bid, dice: state.dice, actual, loserId, gainerId };
+  const reveal: PerudoReveal = {
+    round: state.round,
+    call,
+    callerId,
+    bid,
+    palifico: state.palifico,
+    dice: state.dice,
+    actual,
+    loserId,
+    gainerId,
+  };
   const sized: PerudoState = {
     ...state,
     dice: Object.fromEntries(state.order.map((id) => [id, new Array<number>(counts[id]!).fill(0)])),

@@ -1,4 +1,4 @@
-import type { RoomSettings } from '@gamedeck/shared';
+import type { RoomSettings, RoomSummary } from '@gamedeck/shared';
 import { AppError } from '../errors.js';
 import { Room, type PlayerInfo } from './room.js';
 
@@ -27,6 +27,25 @@ export class RoomManager {
   roomOf(playerId: string): Room | undefined {
     const code = this.roomOfPlayer.get(playerId);
     return code ? this.rooms.get(code) : undefined;
+  }
+
+  /**
+   * Список комнат для главной. Сначала без пароля, потом с паролем; внутри
+   * каждой группы — сначала те, куда можно войти прямо сейчас (лобби, есть места),
+   * затем более полные, затем с идущей игрой.
+   */
+  list(): RoomSummary[] {
+    const rank = (r: RoomSummary) =>
+      r.status !== 'playing' && r.players < r.maxPlayers ? 0 : r.status === 'playing' ? 2 : 1;
+    return [...this.rooms.values()]
+      .map((room) => room.toSummary())
+      .sort(
+        (a, b) =>
+          Number(a.hasPassword) - Number(b.hasPassword) ||
+          rank(a) - rank(b) ||
+          b.players - a.players ||
+          a.code.localeCompare(b.code),
+      );
   }
 
   create(player: PlayerInfo, settings?: Partial<RoomSettings>): Room {

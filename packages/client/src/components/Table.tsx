@@ -1,7 +1,11 @@
 import type React from 'react';
 import { PLAYER_COLOR_HEX, games, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
 import { isSidePosition, screenPosition, seatsWithPlayers } from '../lib/table';
+import { Avatar } from './Avatar';
 import { Die } from './Die';
+import { PerudoCenter } from './perudo/PerudoCenter';
+import { PerudoMat } from './perudo/PerudoMat';
+import { perudoView } from './perudo/view';
 
 interface Props {
   room: RoomView;
@@ -25,8 +29,9 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
   const me = room.players.find((p) => p.id === myId);
   const mySeat = me?.seat ?? 0;
   const game = room.game;
-  // Стол пока умеет рисовать «Бросок кубика»; у других игр своё состояние (перудо — следующий шаг).
+  // У каждой игры своё состояние: стол знает, как нарисовать коврик и центр для каждой.
   const state = game?.gameId === 'dice-high' ? (game.state as DiceHighState) : undefined;
+  const perudo = perudoView(room);
   const rolls = visibleRolls(state);
   const nameOf = (id: string | null) => room.players.find((p) => p.id === id)?.name ?? '—';
 
@@ -42,7 +47,9 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
 
         const isTurn = game?.currentPlayerId === player.id;
         const isWinner = game?.winnerId === player.id;
-        const out = state && room.status === 'playing' && !state.contenders.includes(player.id);
+        const out =
+          room.status === 'playing' &&
+          ((state && !state.contenders.includes(player.id)) || (perudo && (perudo.hands[player.id]?.count ?? 0) === 0));
         const change = lastMatch?.players.find((p) => p.playerId === player.id);
         const delta = change ? change.ratingAfter - change.ratingBefore : null;
 
@@ -72,8 +79,10 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
               }
             >
               {rolls[player.id] !== undefined && <Die value={rolls[player.id]!} style={player.dice} />}
+              {perudo && room.status !== 'lobby' && <PerudoMat view={perudo} player={player} myId={myId} />}
             </div>
             <div className="seat-name">
+              {player.avatarUrl && <Avatar url={player.avatarUrl} name={player.name} />}
               {player.isHost && <span title="Хост">♛ </span>}
               {player.name}
               {player.id === myId && <span className="muted"> (вы)</span>}
@@ -82,6 +91,13 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
                   {' '}
                   {delta >= 0 ? '+' : ''}
                   {delta}
+                </span>
+              )}
+              {change && change.coins !== 0 && (
+                <span className={change.coins > 0 ? 'delta up' : 'delta down'}>
+                  {' '}
+                  {change.coins > 0 ? '+' : ''}
+                  {change.coins} мон.
                 </span>
               )}
             </div>
@@ -101,7 +117,10 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
             Ждём игроков: {room.players.length}/{room.settings.maxPlayers}
           </div>
         )}
-        {room.status === 'playing' && game && !state && <div className="muted">Интерфейс этой игры ещё в работе</div>}
+        {room.status === 'playing' && game && !state && !perudo && (
+          <div className="muted">Интерфейс этой игры ещё в работе</div>
+        )}
+        {room.status !== 'lobby' && perudo && <PerudoCenter view={perudo} nameOf={nameOf} />}
         {room.status === 'playing' && state && (
           <>
             {state.round > 1 && <div className="round">Переброс, раунд {state.round}</div>}

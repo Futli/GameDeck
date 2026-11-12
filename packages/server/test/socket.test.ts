@@ -3,6 +3,7 @@ import type {
   ClientToServerEvents,
   MatchRecord,
   PerudoView,
+  RoomSummary,
   RoomView,
   ServerToClientEvents,
   SessionInfo,
@@ -86,6 +87,27 @@ describe('socket protocol', () => {
     const record = await recorded;
     const bob = record.players.find((p) => p.playerId === b.session.playerId);
     expect(bob).toMatchObject({ place: 1, ratingBefore: 1000, ratingAfter: 1016 });
+
+    // Профиль Боба на главном экране: имя из формы и сыгранная партия.
+    const me = await fetch(`${url}/api/me`, { headers: { authorization: `Bearer ${b.session.token}` } });
+    expect(await me.json()).toMatchObject({ displayName: 'Боб', gamesPlayed: 1, wins: 1 });
+    expect((await fetch(`${url}/api/me`)).status).toBe(401);
+  });
+
+  it('главная видит список комнат и его обновления', async () => {
+    const a = await client();
+    const watcher = await client();
+    expect(await call(watcher.socket.emitWithAck('rooms:watch'))).toEqual([]);
+
+    const updated = new Promise<RoomSummary[]>((resolve) => watcher.socket.once('rooms:list', resolve));
+    const created = await call<RoomView>(
+      a.socket.emitWithAck('room:create', { name: 'Алиса', settings: { password: 'pw' } }),
+    );
+    expect(await updated).toMatchObject([{ code: created.code, hasPassword: true, hostName: 'Алиса', players: 1 }]);
+
+    const wrong = await watcher.socket.emitWithAck('room:join', { code: created.code, name: 'Боб', password: 'x' });
+    expect(wrong).toMatchObject({ ok: false, error: { code: 'WRONG_PASSWORD' } });
+    await call(watcher.socket.emitWithAck('room:join', { code: created.code, name: 'Боб', password: 'pw' }));
   });
 
   it('отклоняет кривые данные через zod', async () => {

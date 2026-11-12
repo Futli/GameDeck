@@ -19,6 +19,7 @@ import type { Room } from '../rooms/room.js';
 import type { RoomManager } from '../rooms/room-manager.js';
 import type { PlayerService } from '../players/player-service.js';
 import type { StatsService } from '../stats/stats-service.js';
+import { InitDataError, verifyInitData } from '../telegram/init-data.js';
 
 export type GameServer = Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
@@ -29,6 +30,7 @@ export interface HandlerDeps {
   stats: StatsService;
   rng: Rng;
   disconnectGraceMs: number;
+  telegram?: { botToken: string; maxAgeSec: number };
   log: FastifyBaseLogger;
 }
 
@@ -36,6 +38,10 @@ export interface HandlerDeps {
 const playerChannel = (playerId: string) => `player:${playerId}`;
 /** Канал Socket.IO с участниками комнаты. */
 const roomChannel = (code: string) => `room:${code}`;
+/** Канал тех, кто смотрит список комнат на главной. */
+const LOBBY_CHANNEL = 'lobby';
+/** Список комнат рассылаем не чаще, чем раз в это время: ходы в партии не должны заваливать главную. */
+const LOBBY_THROTTLE_MS = 300;
 
 /** Превратить любое исключение в ответ клиенту. Неожиданные ошибки — в лог, наружу — общий текст. */
 function toErrorResult(err: unknown, log: FastifyBaseLogger) {
@@ -51,14 +57,26 @@ function toErrorResult(err: unknown, log: FastifyBaseLogger) {
 
 /** Подключает обработчики событий. Возвращает функцию очистки таймеров (для остановки сервера). */
 export function registerSocketHandlers(deps: HandlerDeps): () => void {
-  const { io, rooms, players, stats, rng, log } = deps;
+  const { io, rooms, players, stats, rng, log, telegram } = deps;
   const leaveTimers = new Map<string, NodeJS.Timeout>();
+  let lobbyTimer: NodeJS.Timeout | null = null;
+
+  /** Сообщить главной, что список комнат мог измениться (с задержкой, чтобы склеить серию изменений). */
+  const notifyLobby = () => {
+    if (lobbyTimer) return;
+    lobbyTimer = setTimeout(() => {
+      lobbyTimer = null;
+      io.to(LOBBY_CHANNEL).emit('rooms:list', rooms.list());
+    }, LOBBY_THROTTLE_MS);
+  };
 
   /**
    * Разослать состояние комнаты. Не одним сообщением на канал комнаты, а
    * каждому игроку своё: в перудо у каждого свой набор видимых кубиков.
    */
   const broadcast = (room: Room | undefined) => {
+    // Любое изменение комнаты (или её исчезновение) может поменять список на главной.
+    notifyLobby();
     if (!room) return;
     for (const id of room.players.keys()) {
       io.to(playerChannel(id)).emit('room:state', room.toView(id));
@@ -96,14 +114,34 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
       }
     };
 
+  /**
+   * Кто подключился. Из Telegram клиент присылает initData: проверяем подпись
+   * и входим по telegram id. Иначе — анонимная сессия по токену.
+   */
+  const resolve = async (auth: Record<string, unknown> | undefined) => {
+    const initData = auth?.initData;
+    if (typeof initData === 'string' && initData.length > 0) {
+      if (telegram) {
+        const launch = verifyInitData(initData, telegram);
+        return players.resolveTelegram(launch.user, auth?.token);
+      }
+      log.warn('initData пришла, но BOT_TOKEN не задан — вход через Telegram выключен');
+    }
+    return players.resolveSession(auth?.token);
+  };
+
   // Middleware: выполняется до 'connection'. Здесь определяем, кто подключился.
   io.use(async (socket, next) => {
     try {
-      const session = await players.resolveSession(socket.handshake.auth?.token);
+      const session = await resolve(socket.handshake.auth);
       socket.data.playerId = session.playerId;
       socket.data.token = session.token;
       next();
     } catch (err) {
+      if (err instanceof InitDataError) {
+        log.warn({ reason: err.message }, 'telegram auth failed');
+        return next(new Error('TELEGRAM_AUTH_FAILED'));
+      }
       log.error({ err }, 'session error');
       next(new Error('SESSION_UNAVAILABLE'));
     }
@@ -138,10 +176,10 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
       'room:create',
       handle(async ([input]) => {
         const { name, color, settings } = createRoomSchema.parse(input);
-        const dice = await players.diceStyle(playerId);
+        const [dice, avatarUrl] = await Promise.all([players.diceStyle(playerId), players.avatarUrl(playerId)]);
         const previous = rooms.roomOf(playerId);
         if (previous) exitRoom(previous.code, playerId);
-        const room = rooms.create({ id: playerId, name, color, dice }, settings);
+        const room = rooms.create({ id: playerId, name, color, dice, avatarUrl }, settings);
         saveName(playerId, name);
         broadcast(previous);
         return enterRoom(room);
@@ -152,9 +190,9 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
       'room:join',
       handle(async ([input]) => {
         const { code, name, password, color } = joinRoomSchema.parse(input);
-        const dice = await players.diceStyle(playerId);
+        const [dice, avatarUrl] = await Promise.all([players.diceStyle(playerId), players.avatarUrl(playerId)]);
         const previous = rooms.roomOf(playerId);
-        const room = rooms.join({ id: playerId, name, color, dice }, code, password);
+        const room = rooms.join({ id: playerId, name, color, dice, avatarUrl }, code, password);
         saveName(playerId, name);
         if (previous && previous !== room) {
           exitRoom(previous.code, playerId);
@@ -208,6 +246,22 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     );
 
     socket.on(
+      'rooms:watch',
+      handle(() => {
+        void socket.join(LOBBY_CHANNEL);
+        return rooms.list();
+      }),
+    );
+
+    socket.on(
+      'rooms:unwatch',
+      handle(() => {
+        void socket.leave(LOBBY_CHANNEL);
+        return null;
+      }),
+    );
+
+    socket.on(
       'game:start',
       handle(() => {
         const room = requireRoom(rooms, playerId);
@@ -250,7 +304,10 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     });
   });
 
-  return () => leaveTimers.forEach(clearTimeout);
+  return () => {
+    leaveTimers.forEach(clearTimeout);
+    if (lobbyTimer) clearTimeout(lobbyTimer);
+  };
 }
 
 function requireRoom(rooms: RoomManager, playerId: string): Room {

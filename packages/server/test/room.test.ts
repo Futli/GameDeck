@@ -13,7 +13,16 @@ describe('RoomManager', () => {
     const room = rooms.create(alice);
     expect(room.code).toMatch(/^[A-Z2-9]{5}$/);
     expect(room.toView().players).toEqual([
-      { id: 'alice', name: 'Алиса', seat: 0, color: 'red', dice: DEFAULT_DICE_STYLE, isHost: true, connected: true },
+      {
+        id: 'alice',
+        name: 'Алиса',
+        seat: 0,
+        color: 'red',
+        dice: DEFAULT_DICE_STYLE,
+        avatarUrl: null,
+        isHost: true,
+        connected: true,
+      },
     ]);
   });
 
@@ -35,6 +44,27 @@ describe('RoomManager', () => {
     expect(() => rooms.join(carol, room.code, 'secret')).toThrow('Комната заполнена');
     expect(room.toView().settings.hasPassword).toBe(true);
     expect(JSON.stringify(room.toView())).not.toContain('secret');
+  });
+
+  it('список комнат: сначала без пароля, потом с паролем; пароль наружу не уходит', () => {
+    const rooms = new RoomManager();
+    const locked = rooms.create(alice, { password: 'secret' });
+    const open = rooms.create(bob);
+    rooms.create(carol, { password: '' }); // пустой пароль = открытая комната
+    const list = rooms.list();
+    expect(list.map((r) => r.hasPassword)).toEqual([false, false, true]);
+    expect(list.at(-1)).toEqual({
+      code: locked.code,
+      status: 'lobby',
+      gameId: 'dice-high',
+      stake: 0,
+      hasPassword: true,
+      hostName: 'Алиса',
+      players: 1,
+      maxPlayers: 6,
+    });
+    expect(JSON.stringify(list)).not.toContain('secret');
+    expect(list.map((r) => r.code)).toContain(open.code);
   });
 
   it('хост уходит — хостом становится следующий; пустая комната удаляется', () => {
