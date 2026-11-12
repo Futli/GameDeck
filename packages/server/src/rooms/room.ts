@@ -5,6 +5,7 @@ import {
   PLAYER_COLORS,
   games,
   type DiceStyle,
+  type EquippedSkins,
   type GameModule,
   type PlayerColor,
   type RoomSettings,
@@ -21,6 +22,7 @@ interface Player {
   seat: number;
   color: PlayerColor;
   dice: DiceStyle;
+  skins: EquippedSkins;
   avatarUrl: string | null;
   connected: boolean;
 }
@@ -32,6 +34,8 @@ export interface PlayerInfo {
   color?: PlayerColor;
   /** Скин кубиков из надетых предметов; без него — классический. */
   dice?: DiceStyle;
+  /** Надетые сгенерированные скины. */
+  skins?: EquippedSkins;
   /** Аватар из Telegram. */
   avatarUrl?: string | null;
 }
@@ -90,6 +94,7 @@ export class Room {
       seat: 0,
       color: this.pickColor(host.color),
       dice: host.dice ?? DEFAULT_DICE_STYLE,
+      skins: host.skins ?? {},
       avatarUrl: host.avatarUrl ?? null,
       connected: true,
     });
@@ -99,7 +104,7 @@ export class Room {
     return this.players.size === 0;
   }
 
-  addPlayer({ id, name, color, dice, avatarUrl }: PlayerInfo, password?: string): void {
+  addPlayer({ id, name, color, dice, skins, avatarUrl }: PlayerInfo, password?: string): void {
     if (this.players.has(id)) return; // повторный вход — не ошибка
     if (this.status === 'playing') throw new AppError('GAME_IN_PROGRESS', 'Игра уже идёт');
     if (this.settings.password && this.settings.password !== password) {
@@ -114,6 +119,7 @@ export class Room {
       seat: this.freeSeat(),
       color: this.pickColor(color),
       dice: dice ?? DEFAULT_DICE_STYLE,
+      skins: skins ?? {},
       avatarUrl: avatarUrl ?? null,
       connected: true,
     });

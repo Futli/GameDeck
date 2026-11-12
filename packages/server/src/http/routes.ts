@@ -1,10 +1,11 @@
-import { games, roomCodeSchema } from '@gamedeck/shared';
+import { SKIN_KINDS, games, roomCodeSchema } from '@gamedeck/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AppError } from '../errors.js';
 import type { PlayerService } from '../players/player-service.js';
 import type { RoomManager } from '../rooms/room-manager.js';
 import type { ShopService } from '../shop/shop-service.js';
+import type { SkinService } from '../skins/skin-service.js';
 import type { StatsService } from '../stats/stats-service.js';
 
 export interface HttpDeps {
@@ -12,10 +13,14 @@ export interface HttpDeps {
   players: PlayerService;
   stats: StatsService;
   shop: ShopService;
+  skins: SkinService;
   telegramAppUrl: string | null;
 }
 
 const itemBodySchema = z.object({ itemId: z.string().min(1) });
+const skinParamsSchema = z.object({ id: z.uuid() });
+const unequipBodySchema = z.object({ kind: z.enum(SKIN_KINDS) });
+const giftBodySchema = z.object({ toPlayerId: z.uuid() });
 const leaderboardQuerySchema = z.object({
   game: z.enum(Object.keys(games) as [string, ...string[]]).default('dice-high'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -26,7 +31,7 @@ const leaderboardQuerySchema = z.object({
  * проверка «жив ли сервер», превью комнаты, профили, рейтинг и магазин.
  */
 export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
-  const { rooms, players, stats, shop } = deps;
+  const { rooms, players, stats, shop, skins } = deps;
 
   // Ошибки приложения и zod → понятный JSON с кодом, остальное — 500.
   app.setErrorHandler((err, _request, reply) => {
@@ -107,5 +112,28 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
   app.post('/api/me/equip', async (request) => {
     const playerId = await requirePlayer(request);
     return shop.equip(playerId, itemBodySchema.parse(request.body).itemId);
+  });
+
+  // ─── Сгенерированные скины ───────────────────────────────
+  // Выпуск скинов (дроп) здесь не открыт: его вызывает сервер, а не клиент.
+
+  app.get('/api/me/skins', async (request) => ({ skins: await skins.list(await requirePlayer(request)) }));
+
+  app.get('/api/skins/:id', async (request) => skins.card(skinParamsSchema.parse(request.params).id));
+
+  app.post('/api/skins/:id/equip', async (request) => {
+    const playerId = await requirePlayer(request);
+    return { skins: await skins.equip(playerId, skinParamsSchema.parse(request.params).id) };
+  });
+
+  app.post('/api/me/skins/unequip', async (request) => {
+    const playerId = await requirePlayer(request);
+    return { skins: await skins.unequip(playerId, unequipBodySchema.parse(request.body).kind) };
+  });
+
+  app.post('/api/skins/:id/gift', async (request) => {
+    const playerId = await requirePlayer(request);
+    const { id } = skinParamsSchema.parse(request.params);
+    return { skins: await skins.gift(playerId, giftBodySchema.parse(request.body).toPlayerId, id) };
   });
 }

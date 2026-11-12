@@ -72,7 +72,7 @@ export function PerudoControls({
           <span className="muted">Ваши кубики в новом раунде:</span>
           <div className="pd-dice">
             {myHand.map((v, i) => (
-              <Die key={i} value={v} size={28} style={me?.dice} />
+              <Die key={i} value={v} size={28} style={me?.dice} skin={me?.skins.dice} />
             ))}
           </div>
         </div>
@@ -93,7 +93,7 @@ export function PerudoControls({
                 disabled={busy || (faceLocked && f !== prev!.face) || (!prev && f === 1 && !view.palifico)}
                 onClick={() => pickFace(f)}
               >
-                <Die value={f} size={28} style={me?.dice} />
+                <Die value={f} size={28} style={me?.dice} skin={me?.skins.dice} />
               </button>
             ))}
           </div>

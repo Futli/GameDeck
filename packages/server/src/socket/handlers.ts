@@ -18,6 +18,7 @@ import { AppError } from '../errors.js';
 import type { Room } from '../rooms/room.js';
 import type { RoomManager } from '../rooms/room-manager.js';
 import type { PlayerService } from '../players/player-service.js';
+import type { SkinService } from '../skins/skin-service.js';
 import type { StatsService } from '../stats/stats-service.js';
 import { InitDataError, verifyInitData } from '../telegram/init-data.js';
 
@@ -27,6 +28,7 @@ export interface HandlerDeps {
   io: GameServer;
   rooms: RoomManager;
   players: PlayerService;
+  skins: SkinService;
   stats: StatsService;
   rng: Rng;
   disconnectGraceMs: number;
@@ -57,7 +59,7 @@ function toErrorResult(err: unknown, log: FastifyBaseLogger) {
 
 /** Подключает обработчики событий. Возвращает функцию очистки таймеров (для остановки сервера). */
 export function registerSocketHandlers(deps: HandlerDeps): () => void {
-  const { io, rooms, players, stats, rng, log, telegram } = deps;
+  const { io, rooms, players, skins, stats, rng, log, telegram } = deps;
   const leaveTimers = new Map<string, NodeJS.Timeout>();
   let lobbyTimer: NodeJS.Timeout | null = null;
 
@@ -176,10 +178,14 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
       'room:create',
       handle(async ([input]) => {
         const { name, color, settings } = createRoomSchema.parse(input);
-        const [dice, avatarUrl] = await Promise.all([players.diceStyle(playerId), players.avatarUrl(playerId)]);
+        const [dice, equipped, avatarUrl] = await Promise.all([
+          players.diceStyle(playerId),
+          skins.equipped(playerId),
+          players.avatarUrl(playerId),
+        ]);
         const previous = rooms.roomOf(playerId);
         if (previous) exitRoom(previous.code, playerId);
-        const room = rooms.create({ id: playerId, name, color, dice, avatarUrl }, settings);
+        const room = rooms.create({ id: playerId, name, color, dice, skins: equipped, avatarUrl }, settings);
         saveName(playerId, name);
         broadcast(previous);
         return enterRoom(room);
@@ -190,9 +196,13 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
       'room:join',
       handle(async ([input]) => {
         const { code, name, password, color } = joinRoomSchema.parse(input);
-        const [dice, avatarUrl] = await Promise.all([players.diceStyle(playerId), players.avatarUrl(playerId)]);
+        const [dice, equipped, avatarUrl] = await Promise.all([
+          players.diceStyle(playerId),
+          skins.equipped(playerId),
+          players.avatarUrl(playerId),
+        ]);
         const previous = rooms.roomOf(playerId);
-        const room = rooms.join({ id: playerId, name, color, dice, avatarUrl }, code, password);
+        const room = rooms.join({ id: playerId, name, color, dice, skins: equipped, avatarUrl }, code, password);
         saveName(playerId, name);
         if (previous && previous !== room) {
           exitRoom(previous.code, playerId);

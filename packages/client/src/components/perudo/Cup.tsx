@@ -1,11 +1,23 @@
-import { PLAYER_COLOR_HEX, type PlayerColor } from '@gamedeck/shared';
+import { CUP_HEIGHT, CUP_WIDTH, PLAYER_COLOR_HEX, type PlayerColor, type SkinSeed } from '@gamedeck/shared';
+import { skinImageUrl } from '../../lib/skins';
 
 /**
  * Пиксельный стакан цвета игрока, перевёрнутый вверх дном: кубики под ним.
  * Сетка 16×18, сверху дно (узкое), снизу широкий край.
  */
-export function Cup({ color, size = 36 }: { color: PlayerColor; size?: number }) {
+export function Cup({ color, size = 36, skin }: { color: PlayerColor; size?: number; skin?: SkinSeed }) {
   const { light, main, shade } = PLAYER_COLOR_HEX[color];
+  // Сгенерированный стакан: ободок у края всё равно цвета игрока.
+  if (skin)
+    return (
+      <img
+        className="cup cup--skin"
+        src={skinImageUrl(skin, { playerColor: main })}
+        width={size}
+        height={(size * CUP_HEIGHT) / CUP_WIDTH}
+        alt=""
+      />
+    );
   return (
     <svg
       className="cup"

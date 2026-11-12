@@ -475,6 +475,18 @@ select {
   width: 64px;
   height: 128px;
 }
+/*
+ * Сгенерированный коврик: картинка 128×64 из генератора скинов, растянутая без сглаживания.
+ * Рамка, нитка цвета игрока и объём уже нарисованы в пикселях, поэтому свои тени не нужны —
+ * остаётся только тень под ковриком.
+ */
+.mat--skin {
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  box-shadow:
+    0 6px 0 #00000080,
+    0 10px 16px #0007;
+}
 
 .table-center {
   grid-area: mid;
@@ -574,6 +586,10 @@ select {
 .pd-count {
   font-weight: 700;
   text-shadow: 0 2px 0 #000a;
+}
+.die--skin,
+.cup--skin {
+  image-rendering: pixelated;
 }
 .cup {
   display: block;

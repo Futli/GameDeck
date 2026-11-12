@@ -1,4 +1,5 @@
-import { DEFAULT_DICE_STYLE, DICE_PIP_LAYOUT, type DiceStyle } from '@gamedeck/shared';
+import { DEFAULT_DICE_STYLE, DICE_PIP_LAYOUT, type DiceStyle, type SkinSeed } from '@gamedeck/shared';
+import { skinImageUrl } from '../lib/skins';
 
 /**
  * Пиксельный кубик на сетке 21×21 «пикселя».
@@ -29,9 +30,22 @@ interface Props {
   /** Размер в CSS-пикселях. Лучше кратный 21, тогда «пиксели» кубика одинаковые. */
   size?: number;
   style?: DiceStyle;
+  /** Сгенерированный скин: если надет, рисуется он, а style игнорируется. */
+  skin?: SkinSeed;
 }
 
-export function Die({ value, size = 42, style = DEFAULT_DICE_STYLE }: Props) {
+export function Die({ value, size = 42, style = DEFAULT_DICE_STYLE, skin }: Props) {
+  if (skin)
+    return (
+      <img
+        className="die die--skin"
+        src={skinImageUrl(skin, { value, playerColor: '#000000' })}
+        width={size}
+        height={size}
+        alt={`Выпало ${value}`}
+      />
+    );
+
   const outline = mix(style.face, '#000000', 0.55);
   const shade = mix(style.face, '#000000', 0.22);
   const light = mix(style.face, '#ffffff', 0.45);

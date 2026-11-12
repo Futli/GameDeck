@@ -19,7 +19,7 @@ export function PerudoMat({ view, player, myId }: { view: PerudoView; player: Pl
         <div className="pd-dice">
           {revealed.map((value, i) => (
             <span key={i} className={matchesBid(value, reveal.bid.face, reveal.palifico) ? 'pd-hit' : 'pd-miss'}>
-              <Die value={value} size={21} style={player.dice} />
+              <Die value={value} size={21} style={player.dice} skin={player.skins.dice} />
             </span>
           ))}
         </div>
@@ -38,7 +38,7 @@ export function PerudoMat({ view, player, myId }: { view: PerudoView; player: Pl
       <div className="pd-mat">
         <div className="pd-dice">
           {hand.dice.map((value, i) => (
-            <Die key={i} value={value} size={21} style={player.dice} />
+            <Die key={i} value={value} size={21} style={player.dice} skin={player.skins.dice} />
           ))}
         </div>
       </div>
@@ -47,7 +47,7 @@ export function PerudoMat({ view, player, myId }: { view: PerudoView; player: Pl
 
   return (
     <div className="pd-mat pd-mat--cup">
-      <Cup color={player.color} />
+      <Cup color={player.color} skin={player.skins.cup} />
       <span className="pd-count">×{hand.count}</span>
     </div>
   );
