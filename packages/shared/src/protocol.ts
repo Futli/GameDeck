@@ -20,6 +20,8 @@ export interface PlayerView {
   color: PlayerColor;
   /** Скин кубиков: надетый предмет из магазина (слот dice). */
   dice: DiceStyle;
+  /** Аватар из Telegram; null — игрок из браузера или Telegram не отдал фото. */
+  avatarUrl: string | null;
   isHost: boolean;
   connected: boolean;
 }

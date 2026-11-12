@@ -12,6 +12,7 @@ export interface HttpDeps {
   players: PlayerService;
   stats: StatsService;
   shop: ShopService;
+  telegramAppUrl: string | null;
 }
 
 const itemBodySchema = z.object({ itemId: z.string().min(1) });
@@ -50,6 +51,8 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
 
   /** Список комнат для главной: сначала без пароля, потом с паролем. */
   app.get('/api/rooms', async () => ({ rooms: rooms.list() }));
+  /** Настройки, которые клиент узнаёт при старте. Так один и тот же образ работает с любым ботом. */
+  app.get('/api/config', async () => ({ telegramAppUrl: deps.telegramAppUrl }));
 
   app.get<{ Params: { code: string } }>('/api/rooms/:code', async (request, reply) => {
     const parsed = roomCodeSchema.safeParse(request.params.code);
