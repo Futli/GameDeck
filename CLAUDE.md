@@ -12,14 +12,20 @@
 | --- | --- | --- |
 | Зависимости | `pnpm install --frozen-lockfile` | ~2 с |
 | Типы во всех пакетах | `pnpm typecheck` | ~6 с |
+| Линтер (ESLint) | `pnpm lint`, автоисправление `pnpm lint:fix` | ~2 с |
+| Всё сразу, как в CI | `pnpm check` | ~13 с |
 | Все тесты (Vitest, PGlite в памяти) | `pnpm test` | ~5 с |
 | Один файл тестов | `pnpm exec vitest run packages/server/test/socket.test.ts` | |
 | Dev: сервер :3000 + клиент :5173 | `DATABASE_URL=memory:// pnpm dev` | |
 | Сборка | `pnpm build` | |
 | Миграция после правки `schema.ts` | `pnpm db:generate` | |
 
-Перед коммитом: `pnpm typecheck && pnpm test` — то же самое гоняет CI
-(`.github/workflows/deploy.yml`). Линтера и форматтера в проекте пока нет.
+Перед коммитом: `pnpm check` (typecheck + lint + test) — то же самое гоняет CI
+(`.github/workflows/deploy.yml`). Линтер — ESLint 9 flat config (`eslint.config.js`):
+typescript-eslint recommended, `import type` обязателен, react-hooks для клиента.
+Отключать правило можно только точечно `eslint-disable-next-line ... -- причина`.
+Хук PostToolUse (`.claude/hooks/lint-file.cjs`) сам делает `eslint --fix` по каждому
+правленному файлу и возвращает оставшиеся ошибки — их надо исправить сразу.
 
 Чтобы запустить приложение и посмотреть на него глазами — skill `run-gamedeck`
 (`.claude/skills/run-gamedeck/SKILL.md`).
@@ -61,6 +67,12 @@
   понятным объяснением в `docs/*-guide.md`.
 - Параллельно работают несколько веток/PR. Перед пушем: `git fetch origin main`
   и слить main в свою ветку, конфликты решать, не теряя чужие изменения.
+
+## Машины
+
+- **TRASHCAN** — локальная машина разработчика (Windows), здесь запускается Claude Code локально.
+  Хуки в `.claude/` пишутся на bash (на Windows их выполняет Git Bash) и вне облака ничего не делают.
+- **Ubuntu-сервер** — боевая сборка для Telegram Mini App.
 
 ## Деплой (не трогать без явной просьбы)
 
