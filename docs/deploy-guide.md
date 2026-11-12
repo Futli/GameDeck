@@ -188,8 +188,10 @@ app ──HTTP-прокси──▶ xray (тот же сервер) ══VLESS
    ```bash
    cd /opt/gamedeck/deploy && mkdir -p xray
    nano xray/link.txt          # вставить ссылку vless://, сохранить
-   docker compose run --rm --no-deps -T app node dist/proxy/xray-config-cli.js < xray/link.txt > xray/config.json
-   rm xray/link.txt && chmod 644 xray/config.json
+   docker compose pull app     # свежий образ: в старом скрипта может не быть
+   docker compose run --rm --no-deps -T app node dist/proxy/xray-config-cli.js < xray/link.txt > xray/config.json \
+     && rm xray/link.txt && chmod 644 xray/config.json
+   head -3 xray/config.json    # должен начинаться с {"log": …
    ```
 
    Папка `deploy/xray/` в git не попадает. Поддерживаются ссылки VLESS с Reality, TLS или без шифрования, транспорт tcp, ws, grpc, xhttp. Другую ссылку скрипт отклонит с объяснением.
