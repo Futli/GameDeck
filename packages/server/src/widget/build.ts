@@ -9,6 +9,7 @@ import {
 } from '@gamedeck/shared';
 import { assertValidMat, type MatSkin } from './mat.js';
 import { WIDGET_SOURCE } from './source.js';
+import { WIDGET_UI, type BotLang, type WidgetUiKey } from './texts.js';
 
 /** Лимиты Telegram на HTML виджета: сырой размер и размер после zlib уровня 9. */
 export const WIDGET_MAX_BYTES = 32_768;
@@ -108,10 +109,10 @@ function assertLink(url: string | null): void {
 }
 
 /**
- * Собрать HTML виджета для игрока с его скинами. Заменить HTML у уже отправленного
- * виджета Telegram не даёт, поэтому при смене скина бот присылает новый виджет.
+ * Собрать HTML виджета для игрока с его скинами и на его языке. Заменить HTML у уже
+ * отправленного виджета Telegram не даёт, поэтому при смене скина бот присылает новый виджет.
  */
-export function buildWidgetHtml(skins: WidgetSkins, links: WidgetLinks): string {
+export function buildWidgetHtml(skins: WidgetSkins, links: WidgetLinks, lang: BotLang = 'ru'): string {
   assertValidMat(skins.mat);
   [links.invite, links.ad, links.findGame].forEach(assertLink);
 
@@ -126,7 +127,10 @@ export function buildWidgetHtml(skins: WidgetSkins, links: WidgetLinks): string 
   };
   // «</» внутри <script> закрыло бы тег, поэтому экранируем косую черту.
   const json = JSON.stringify(config).replaceAll('</', '<\\/');
-  const html = strip(WIDGET_SOURCE).replace('__CFG__', () => json);
+  const ui = WIDGET_UI[lang];
+  const html = strip(WIDGET_SOURCE)
+    .replace(/@(\w+)@/g, (_, key: string) => ui[key as WidgetUiKey])
+    .replace('__CFG__', () => json);
 
   const { bytes, packed } = measureWidget(html);
   if (bytes > WIDGET_MAX_BYTES || packed > WIDGET_MAX_PACKED - PACKED_MARGIN) {

@@ -380,6 +380,24 @@ describe('бот с виджетом', () => {
     expect(JSON.parse(calls.at(-1)!.params.data as string)).toMatchObject({ d: [2, 3, 2], c: 3, m: 0 });
   });
 
+  it('игроку с английским Telegram отвечает по-английски', async () => {
+    const { players, skins, widget, user } = await setup(diceRng(4, 4, 4));
+    const { api, calls } = fakeApi();
+    const bot = new WidgetBot({ api, players, skins, widget, appUrl: null, log, now: () => 1000 });
+    const english = { ...user, language_code: 'en' };
+
+    await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: english } });
+    const sent = calls.find((c) => c.method === 'sendWidget')!;
+    expect(sent.params.caption).toBe('Lucky Dice: roll the dice and collect coins.');
+    expect(sent.params.html).not.toMatch(/[А-Яа-яЁё]/);
+
+    await bot.handleUpdate({ update_id: 2, widget_query: { id: 'q1', from: english, data: 'r' } });
+    const answer = calls.find((c) => c.method === 'answerWidgetQuery')!;
+    expect(JSON.parse(answer.params.data as string)).toMatchObject({
+      x: 'Triple, ×5! +60 coins. You got a common skin “Oak table”',
+    });
+  });
+
   it('не отвечает в группах и отвечает ошибкой на незнакомый запрос', async () => {
     const { players, skins, widget, user } = await setup(diceRng(1, 2, 4));
     const { api, calls } = fakeApi();
