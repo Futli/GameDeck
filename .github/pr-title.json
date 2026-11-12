@@ -26,6 +26,7 @@
     "db": "схема БД и миграции",
     "deploy": "Proxmox, Caddy, compose, сервер",
     "harness": "обвязка Claude Code, проверки, линтеры",
-    "docs": "гайды в docs/"
+    "docs": "гайды в docs/",
+    "lang": "языки интерфейса и переводы"
   }
 }

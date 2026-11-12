@@ -1,6 +1,7 @@
 import type { PerudoView, PlayerView } from '@gamedeck/shared';
 import { Die } from '../Die';
 import { Cup } from './Cup';
+import { useT } from '../../i18n';
 import { matchesBid, shownReveal } from './view';
 
 /**
@@ -9,6 +10,7 @@ import { matchesBid, shownReveal } from './view';
  */
 export function PerudoMat({ view, player, myId }: { view: PerudoView; player: PlayerView; myId: string }) {
   const reveal = shownReveal(view);
+  const t = useT();
   const revealed = reveal?.dice[player.id];
 
   if (reveal && revealed && revealed.length > 0) {
@@ -31,7 +33,7 @@ export function PerudoMat({ view, player, myId }: { view: PerudoView; player: Pl
   }
 
   const hand = view.hands[player.id];
-  if (!hand || hand.count === 0) return <div className="pd-mat muted">выбыл</div>;
+  if (!hand || hand.count === 0) return <div className="pd-mat muted">{t.perudo.out}</div>;
 
   if (player.id === myId && hand.dice) {
     return (

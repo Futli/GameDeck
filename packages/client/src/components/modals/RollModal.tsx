@@ -1,9 +1,9 @@
 import { ROOM_TIMEOUTS, type PerudoView, type RoomView } from '@gamedeck/shared';
 import { useEffect, useState } from 'react';
+import { useT } from '../../i18n';
 import { api } from '../../lib/socket';
 import { Die } from '../Die';
 import { Cup } from '../perudo/Cup';
-import { bidText } from '../perudo/view';
 import { TimerBar } from '../TimerBar';
 import { Sheet } from './Sheet';
 
@@ -21,27 +21,28 @@ function RoundResult({
   myId: string;
   nameOf: (id: string | null) => string;
 }) {
+  const t = useT();
   const reveal = view.lastReveal;
   if (!reveal) return null;
   const mine = reveal.loserId === myId ? 'lose' : reveal.gainerId === myId ? 'gain' : null;
   return (
     <div className={mine ? `round-result round-result--${mine}` : 'round-result'}>
       <div>
-        <b>{nameOf(reveal.callerId)}</b>: {reveal.call === 'dudo' ? '«Не верю!»' : '«Точно!»'} Ставка{' '}
-        {bidText(reveal.bid.quantity, reveal.bid.face)}, нашлось {reveal.actual}.
+        <b>{nameOf(reveal.callerId)}</b>: {reveal.call === 'dudo' ? t.perudo.dudo : t.perudo.calza}{' '}
+        {t.perudo.revealed(t.perudo.bidText(reveal.bid.quantity, reveal.bid.face), reveal.actual)}
       </div>
       <div className="round-result-line">
         {reveal.loserId && (
           <>
-            Кубик теряет <b>{nameOf(reveal.loserId)}</b> <span className="pd-badge pd-badge--bad">−1</span>
+            {t.perudo.loses} <b>{nameOf(reveal.loserId)}</b> <span className="pd-badge pd-badge--bad">−1</span>
           </>
         )}
         {reveal.gainerId && (
           <>
-            Кубик получает <b>{nameOf(reveal.gainerId)}</b> <span className="pd-badge pd-badge--good">+1</span>
+            {t.perudo.gains} <b>{nameOf(reveal.gainerId)}</b> <span className="pd-badge pd-badge--good">+1</span>
           </>
         )}
-        {!reveal.loserId && !reveal.gainerId && 'Никто не теряет кубик'}
+        {!reveal.loserId && !reveal.gainerId && t.perudo.nobodyLoses}
       </div>
     </div>
   );
@@ -52,6 +53,7 @@ function RoundResult({
  * остальных; кто не бросит до конца таймера, выходит из комнаты, играем без него.
  */
 export function RollModal({ room, view, myId }: { room: RoomView; view: PerudoView; myId: string }) {
+  const t = useT();
   const me = room.players.find((p) => p.id === myId);
   const hand = view.hands[myId];
   const rolled = view.rolled.includes(myId);
@@ -72,11 +74,9 @@ export function RollModal({ room, view, myId }: { room: RoomView; view: PerudoVi
   };
 
   return (
-    <Sheet title={`Раунд ${view.round}`}>
+    <Sheet title={t.perudo.round(view.round)}>
       {view.round > 1 && <RoundResult view={view} myId={myId} nameOf={nameOf} />}
-      {view.maputo && (
-        <p className="maputo-note">Мапуто: единицы не джокеры, номинал после первой ставки не меняется</p>
-      )}
+      {view.maputo && <p className="maputo-note">{t.flow.maputoNote}</p>}
 
       {me && hand && hand.count > 0 ? (
         <div className="roll-stage">
@@ -96,7 +96,7 @@ export function RollModal({ room, view, myId }: { room: RoomView; view: PerudoVi
           )}
         </div>
       ) : (
-        <p className="muted center">Вы выбыли — смотрим, кто победит</p>
+        <p className="muted center">{t.perudo.youAreOut}</p>
       )}
 
       <ul className="ready-list ready-list--inline">
@@ -108,15 +108,15 @@ export function RollModal({ room, view, myId }: { room: RoomView; view: PerudoVi
         ))}
       </ul>
 
-      <TimerBar msLeft={room.game?.msLeft ?? null} total={ROOM_TIMEOUTS.roll} label="Не бросил — выбыл" />
+      <TimerBar msLeft={room.game?.msLeft ?? null} total={ROOM_TIMEOUTS.roll} label={t.flow.rollOrOut} />
 
       <div className="sheet-actions">
         {hand && hand.count > 0 && !rolled && (
           <button className="primary big" disabled={shaking} onClick={roll}>
-            Бросить кубики
+            {t.flow.rollDice}
           </button>
         )}
-        {rolled && !shaking && <p className="muted center">Ждём, пока бросят остальные…</p>}
+        {rolled && !shaking && <p className="muted center">{t.flow.waitRolls}</p>}
       </div>
     </Sheet>
   );

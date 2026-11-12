@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api } from '../lib/socket';
 import { useClientState } from '../lib/store';
 import { inviteLink as makeInviteLink, shareInvite, tg } from '../lib/telegram';
+import { useT } from '../i18n';
 import { HostPanel } from './HostPanel';
 import { ReadyCheckModal } from './modals/ReadyCheckModal';
 import { RollModal } from './modals/RollModal';
@@ -18,6 +19,7 @@ export function RoomScreen({ room }: { room: RoomView }) {
   const telegramAppUrl = useClientState((s) => s.telegramAppUrl);
   const lastMatch = useClientState((s) => s.lastMatch);
   const [copied, setCopied] = useState(false);
+  const t = useT();
 
   const me = room.players.find((p) => p.id === myId);
   const isHost = me?.isHost ?? false;
@@ -31,13 +33,13 @@ export function RoomScreen({ room }: { room: RoomView }) {
   const inviteLink = makeInviteLink(room.code, telegramAppUrl);
   const copyInvite = async () => {
     // В Telegram — системное «Поделиться»: выбрать чат и отправить ссылку.
-    if (tg && telegramAppUrl) return shareInvite(inviteLink, room.code);
+    if (tg && telegramAppUrl) return shareInvite(inviteLink, t.room.shareText(room.code));
     try {
       await navigator.clipboard.writeText(inviteLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      prompt('Скопируйте ссылку', inviteLink);
+      prompt(t.room.copyLink, inviteLink);
     }
   };
 
@@ -45,9 +47,9 @@ export function RoomScreen({ room }: { room: RoomView }) {
     <main className="room">
       <header className="room-header">
         <button className="ghost" onClick={() => void api.leaveRoom().catch(ignore)}>
-          ← Выйти
+          {t.room.leave}
         </button>
-        <button className="code" onClick={() => void copyInvite()} title="Пригласить в комнату">
+        <button className="code" onClick={() => void copyInvite()} title={t.room.invite}>
           {room.code} {copied ? '✓' : tg && telegramAppUrl ? '↗' : '⧉'}
         </button>
       </header>
@@ -64,13 +66,13 @@ export function RoomScreen({ room }: { room: RoomView }) {
           <TimerBar
             msLeft={room.game.msLeft}
             total={ROOM_TIMEOUTS.turn}
-            label={myTurn ? 'Ваш ход' : `Ходит ${currentName ?? '—'}`}
+            label={myTurn ? t.room.yourTurn : t.room.turnOf(currentName ?? '—')}
           />
         )}
         {perudo && !rolling && <PerudoControls view={perudo} me={me} myTurn={myTurn} />}
         {myTurn && room.game?.gameId === 'dice-high' && (
           <button className="primary big" onClick={() => void api.roll().catch(ignore)}>
-            Бросить кубик
+            {t.room.roll}
           </button>
         )}
         {isHost && room.status !== 'playing' && !room.readyCheck && (
@@ -79,12 +81,10 @@ export function RoomScreen({ room }: { room: RoomView }) {
             disabled={room.players.length < 2}
             onClick={() => void api.startGame().catch(ignore)}
           >
-            Начать игру
+            {t.room.start}
           </button>
         )}
-        {!isHost && room.status !== 'playing' && !room.readyCheck && (
-          <p className="muted">Хост начнёт игру, когда все соберутся</p>
-        )}
+        {!isHost && room.status !== 'playing' && !room.readyCheck && <p className="muted">{t.room.hostWillStart}</p>}
       </div>
 
       {canEdit && !room.readyCheck && <HostPanel room={room} />}

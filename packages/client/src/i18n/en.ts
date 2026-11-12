@@ -1,0 +1,196 @@
+import type { Messages } from './ru';
+
+/** Английское число: 1 die, 2 dice. */
+const pluralEn = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+/** Номиналы для ставки: «4 fives». */
+const FACES: Record<number, [string, string]> = {
+  1: ['one', 'ones'],
+  2: ['two', 'twos'],
+  3: ['three', 'threes'],
+  4: ['four', 'fours'],
+  5: ['five', 'fives'],
+  6: ['six', 'sixes'],
+};
+
+export const en: Messages = {
+  language: { ru: 'Русский', en: 'English', label: 'Language' },
+
+  app: {
+    connecting: 'Connecting to the server…',
+    telegramAuthFailed: 'Could not verify your Telegram login. Close the game and open it again.',
+    kicked: 'The host removed you from the room',
+    kickedTimeout: 'Time to answer ran out — you left the room',
+  },
+
+  games: {
+    'dice-high': { title: 'Dice Roll', hint: 'Everyone rolls a die, the highest roll wins' },
+    perudo: { title: 'Perudo', hint: 'Dice under cups, bids on the whole table and “Liar!”' },
+  },
+
+  lobby: {
+    tagline: 'Dice games with friends in real time',
+    yourName: 'Your name',
+    namePlaceholder: 'For example, Alex',
+    whatToPlay: 'What are we playing',
+    gameAria: 'Game',
+    playersRange: (min, max) => `${min}–${max} players`,
+    roomPassword: 'Room password (optional)',
+    roomPasswordPlaceholder: 'No password — the room is open to everyone',
+    create: 'Create room',
+    joinByCode: 'or join by code',
+    codeAria: 'Room code',
+    password: 'Password',
+    join: 'Join',
+  },
+
+  profile: {
+    coins: 'coins',
+    games: 'games',
+    wins: 'wins',
+    stakeCoins: 'coins in stakes',
+    wonLost: (won, lost) => `Won ${won}, lost ${lost}`,
+    firstGame: 'Play your first game and your stats will show up here',
+  },
+
+  rooms: {
+    aria: 'Rooms',
+    title: 'Rooms',
+    empty: 'Nobody here yet — create the first room',
+    enterName: 'Enter your name to join a room',
+    withPassword: '🔒 With password',
+    stake: (stake) => `stake ${stake}`,
+    full: 'full',
+    status: { lobby: 'waiting for players', playing: 'game in progress', finished: 'game over' },
+    passwordPlaceholder: 'Room password',
+    join: 'Join',
+  },
+
+  room: {
+    leave: '← Leave',
+    invite: 'Invite to the room',
+    copyLink: 'Copy the link',
+    shareText: (code) => `Join me in GameDeck, room ${code}`,
+    roll: 'Roll the die',
+    start: 'Start game',
+    hostWillStart: 'The host will start when everyone is here',
+    yourTurn: 'Your turn',
+    turnOf: (name) => `${name}’s turn`,
+  },
+
+  flow: {
+    startTitle: 'The game is starting',
+    endTitle: 'Game over',
+    win: 'You won!',
+    winner: (name) => `${name} won`,
+    someone: 'another player',
+    noStake: 'no stake',
+    stake: (n) => `stake ${n} ${pluralEn(n, 'coin', 'coins')}`,
+    stakeLabel: 'Stake',
+    changeStake: 'Change',
+    playing: '✓ playing',
+    thinking: 'thinking…',
+    answerOrLeave: 'No answer — you leave',
+    hostDecides: 'Someone left. The host can wait for a new player or start without them.',
+    notEnough: 'Not enough players — waiting for someone to join with the code.',
+    play: 'I’m in',
+    playAgain: 'Play again',
+    startWithout: 'Start without them',
+    waitOthers: 'Waiting for the others…',
+    leaveRoom: 'Leave the room',
+    maputoNote: 'Maputo: ones are not wild, the face can’t change after the first bid',
+    rollDice: 'Roll the dice',
+    rollOrOut: 'No roll — you’re out',
+    waitRolls: 'Waiting for the others to roll…',
+    seconds: (n) => `${n} s`,
+  },
+
+  settings: {
+    title: 'Room settings',
+    game: 'Game',
+    maxPlayers: 'Max players',
+    stake: 'Stake (coins)',
+    password: (set) => `Password ${set ? '(set)' : '(none)'}`,
+    newPassword: 'new',
+    setPassword: 'Set',
+    removePassword: 'Remove',
+  },
+
+  table: {
+    host: 'Host',
+    you: '(you)',
+    coins: (n) => `${n} ${pluralEn(n, 'coin', 'coins')}`,
+    kick: 'Remove',
+    waiting: (n, max) => `Waiting for players: ${n}/${max}`,
+    notReady: 'This game’s interface is still in the works',
+    reroll: (round) => `Re-roll, round ${round}`,
+    turn: 'Turn:',
+    stake: (stake) => `Stake: ${stake}`,
+    rolled: (value) => `Rolled ${value}`,
+  },
+
+  perudo: {
+    round: (n) => `Round ${n}`,
+    maputo: 'maputo',
+    diceOnTable: (n) => `${n} ${pluralEn(n, 'die', 'dice')} on the table`,
+    allRolling: 'Everyone is rolling',
+    dudo: '“Liar!”',
+    calza: '“Exact!”',
+    revealed: (bid, actual) => `Bid ${bid}, found ${actual}`,
+    loses: 'Loses a die:',
+    gains: 'Gains a die:',
+    nobodyLoses: 'Nobody loses a die',
+    out: 'out',
+    yourNewDice: 'Your dice this round:',
+    youAreOut: 'You are out — let’s see who wins',
+    faceAria: 'Face',
+    bid: (bid) => `Bid: ${bid}`,
+    dudoButton: 'Liar!',
+    calzaButton: 'Exact!',
+    noCalzaInMaputo: 'Not allowed in maputo',
+    maputoRules: (faceLocked) => `Maputo: ones are not wild${faceLocked ? ', the face can’t change' : ''}`,
+    waitTurn: 'Waiting for another player’s move',
+    bidText: (quantity, face) => `${quantity} ${pluralEn(quantity, ...FACES[face]!)}`,
+  },
+};
+
+/**
+ * Ошибки сервера по коду. Сервер пишет их по-русски; английский игрок видит этот перевод.
+ * Неизвестный код — общий текст INTERNAL.
+ */
+export const enErrors: Partial<Record<string, string>> = {
+  INTERNAL: 'Something went wrong',
+  BAD_REQUEST: 'Invalid data',
+  UNAUTHORIZED: 'Session required',
+  PLAYER_NOT_FOUND: 'Player not found',
+  NOT_FOUND: 'Player not found',
+  ROOM_NOT_FOUND: 'Room not found',
+  NOT_IN_ROOM: 'You are not in the room',
+  GAME_IN_PROGRESS: 'The game is already in progress',
+  WRONG_PASSWORD: 'Wrong password',
+  ROOM_FULL: 'The room is full',
+  COLOR_TAKEN: 'This color is already taken',
+  TOO_MANY_PLAYERS: 'There are already more players in the room than the new limit',
+  BAD_TARGET: 'You can’t remove yourself',
+  UNKNOWN_GAME: 'Unknown game',
+  NOT_ENOUGH_PLAYERS: 'Not enough players to start',
+  NO_GAME: 'The game is not running',
+  NOT_HOST: 'Only the host can do this',
+  GAME_OVER: 'The game is already over',
+  NOT_YOUR_TURN: 'It’s not your turn',
+  BAD_MOVE: 'Unknown move',
+  BAD_BID: 'This bid is not allowed',
+  NO_BID: 'Nobody has bid yet',
+  OWN_BID: 'You can’t challenge your own bid',
+  NO_CALZA: '“Exact!” is not allowed in maputo',
+  INSUFFICIENT_COINS: 'Not enough coins',
+  ITEM_NOT_FOUND: 'Item not found',
+  NOT_FOR_COINS: 'This item is sold only for Stars',
+  ALREADY_OWNED: 'You already have this item',
+  NOT_OWNED: 'Buy the item first',
+  SKIN_NOT_FOUND: 'Skin not found',
+  NOT_OWNER: 'You don’t own this skin',
+  SELF_TRANSFER: 'You can’t gift a skin to yourself',
+  NOT_TRADABLE: 'This skin can’t be transferred',
+  SKIN_SEED_EXHAUSTED: 'Could not issue a skin, please try again',
+};

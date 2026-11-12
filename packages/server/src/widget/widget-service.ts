@@ -8,7 +8,6 @@ import {
   type Rng,
   type WidgetDice,
   type WidgetRollBank,
-  type WidgetRollOutcome,
   type WidgetSkinRarity,
 } from '@gamedeck/shared';
 import { and, eq, gte, inArray, isNull, notInArray, sql } from 'drizzle-orm';
@@ -17,8 +16,8 @@ import { items, playerItems, players, widgetPlayers } from '../db/schema.js';
 import { changeCoins, type Tx } from '../db/wallet.js';
 import type { PlayerService } from '../players/player-service.js';
 import type { WidgetRollAnswer, WidgetState } from './build.js';
+import { BOT_TEXTS, prizeText, type BotLang } from './texts.js';
 
-const RARITY_TEXT: Record<WidgetSkinRarity, string> = { common: 'обычный', rare: 'редкий', epic: 'эпический' };
 /** Какие предметы выпадают скином: только то, что видно на столе. */
 const SKIN_KINDS = ['mat', 'dice'];
 
@@ -35,17 +34,6 @@ function parseDice(text: string | null): WidgetDice | null {
   const dice = text?.split(',').map(Number);
   return dice?.length === 3 ? (dice as unknown as WidgetDice) : null;
 }
-
-const OUTCOME_TEXT: Record<WidgetRollOutcome, string> = {
-  plain: '',
-  pair: 'Пара, ×2! ',
-  straight: 'Стрит! ',
-  triple: 'Тройка, ×5! ',
-};
-
-/** Фраза под кубиками: событие, монеты и то, что выпало сверх них. */
-const prizeText = (outcome: WidgetRollOutcome, coins: number, extra: string | null) =>
-  `${OUTCOME_TEXT[outcome]}+${coins} монет${extra ? `. ${extra}` : ''}`;
 
 type WidgetRow = typeof widgetPlayers.$inferSelect;
 
@@ -105,7 +93,7 @@ export class WidgetService {
    * Бросок по запросу виджета. Всё в одной транзакции со строкой игрока под замком:
    * два одновременных нажатия не потратят один и тот же бросок и не начислят монеты дважды.
    */
-  async roll(playerId: string, now: number): Promise<WidgetRollAnswer> {
+  async roll(playerId: string, now: number, lang: BotLang = 'ru'): Promise<WidgetRollAnswer> {
     return this.db.transaction(async (tx) => {
       const row = await this.lockRow(tx, playerId);
 
@@ -118,7 +106,11 @@ export class WidgetService {
 
       const roll = rollWidgetDice(this.rng);
       const coins = await changeCoins(tx, playerId, roll.coins, 'widget_roll', roll.dice.join(','));
-      const extra = roll.skin ? await this.grantSkin(tx, playerId, roll.skin) : roll.modifier ? 'Выпал переброс' : null;
+      const extra = roll.skin
+        ? await this.grantSkin(tx, playerId, roll.skin, lang)
+        : roll.modifier
+          ? BOT_TEXTS[lang].rerollWon
+          : null;
       const modifiers = row.modifiers + (roll.modifier ? 1 : 0);
 
       await tx
@@ -144,7 +136,7 @@ export class WidgetService {
         a: bonusRolls,
         m: modifiers,
         u: modifiers > 0 ? 1 : 0,
-        x: prizeText(roll.outcome, roll.coins, extra),
+        x: prizeText(lang, roll.outcome, roll.coins, extra),
       };
     });
   }
@@ -153,7 +145,7 @@ export class WidgetService {
    * Потратить модификатор: перебросить один кубик последнего броска (dieIndex — 0, 1 или 2).
    * На один бросок — один модификатор. Правила выигрыша — rerollWidgetDie в shared.
    */
-  async reroll(playerId: string, dieIndex: number, now: number): Promise<WidgetRollAnswer> {
+  async reroll(playerId: string, dieIndex: number, now: number, lang: BotLang = 'ru'): Promise<WidgetRollAnswer> {
     return this.db.transaction(async (tx) => {
       const row = await this.lockRow(tx, playerId);
       const last = parseDice(row.lastDice);
@@ -186,7 +178,7 @@ export class WidgetService {
         a: row.bonusRolls,
         m: modifiers,
         u: 0,
-        x: reroll.gain > 0 ? prizeText(reroll.outcome, reroll.gain, null) : 'Приз остался прежним',
+        x: reroll.gain > 0 ? prizeText(lang, reroll.outcome, reroll.gain, null) : BOT_TEXTS[lang].prizeUnchanged,
       };
     });
   }
@@ -292,7 +284,8 @@ export class WidgetService {
    * Выдать случайный предмет нужной редкости из тех, которых у игрока ещё нет.
    * Возвращает фразу для виджета. Предмет остаётся в инвентаре, надеть его можно в Mini App.
    */
-  private async grantSkin(tx: Tx, playerId: string, rarity: WidgetSkinRarity): Promise<string> {
+  private async grantSkin(tx: Tx, playerId: string, rarity: WidgetSkinRarity, lang: BotLang): Promise<string> {
+    const t = BOT_TEXTS[lang];
     const owned = tx.select({ itemId: playerItems.itemId }).from(playerItems).where(eq(playerItems.playerId, playerId));
     const candidates = await tx
       .select({ id: items.id, name: items.name })
@@ -307,9 +300,9 @@ export class WidgetService {
       )
       .orderBy(items.id);
     const item = candidates[Math.floor(this.rng() * candidates.length)];
-    if (!item) return `Все скины редкости «${RARITY_TEXT[rarity]}» уже ваши`;
+    if (!item) return t.allSkinsOwned(t.rarity[rarity]);
 
     await tx.insert(playerItems).values({ playerId, itemId: item.id, source: 'reward' });
-    return `Выпал ${RARITY_TEXT[rarity]} скин «${item.name}»`;
+    return t.skinWon(t.rarity[rarity], t.itemName(item.id, item.name));
   }
 }

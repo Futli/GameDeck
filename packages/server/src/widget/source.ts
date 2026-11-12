@@ -7,7 +7,8 @@
  * кубики и стакан рисуются на canvas прямоугольниками из данных скина.
  *
  * Правила, которые диктует среда (https://core.telegram.org/bots/widgets):
- * - сервер подставляет скины и ссылки вместо __CFG__ (см. build.ts);
+ * - сервер подставляет скины и ссылки вместо __CFG__, а надписи на языке игрока вместо @ключ@
+ *   (см. build.ts и texts.ts);
  * - состояние (попытки, баланс) приходит строкой TelegramWidget.chatData,
  *   её меняет только бот через editMessageWidgetData;
  * - запрос к боту — TelegramWidget.request(), строго внутри обработчика нажатия;
@@ -44,17 +45,17 @@ button:disabled{opacity:.5}
 <canvas id=m width=384 height=288></canvas>
 <canvas id=d width=276 height=84></canvas>
 <canvas id=c width=64 height=72></canvas>
-<button id=g>Бросить</button>
+<button id=g>@roll@</button>
 </div>
-<button id=f>Найти игру</button>
+<button id=f>@findGame@</button>
 </div>
 <div id=p>
-<div><span class=h>Попытки</span><br><b id=r></b> <span class=h id=n></span></div>
-<div><span class=h>Баланс</span><br><b id=b></b></div>
+<div><span class=h>@rolls@</span><br><b id=r></b> <span class=h id=n></span></div>
+<div><span class=h>@balance@</span><br><b id=b></b></div>
 <div class=h id=s></div>
 <button class=q id=k></button>
-<button class=q id=i>Позвать друга</button>
-<button class=q id=a>+1 за рекламу</button>
+<button class=q id=i>@invite@</button>
+<button class=q id=a>@ad@</button>
 </div>
 <div id=o></div>
 <div class=h id=z></div>
@@ -66,7 +67,7 @@ var W=window.TelegramWidget,G=__CFG__,S={},B=0,P=0,
 $=function(i){return document.getElementById(i)},
 T=$('t'),
 // Тексты для ошибок: коды Telegram и наш NO_ROLLS. На NO_MOD хватает общего текста: кнопка переброса и так выключена, когда он недоступен.
-E={NO_ROLLS:'Попытки закончились',RATE_LIMITED:'Слишком часто',TIMEOUT:'Сервер не ответил'},
+E={NO_ROLLS:'@noRolls@',RATE_LIMITED:'@rateLimited@',TIMEOUT:'@timeout@'},
 // Точки на грани: для каждого значения — номера ячеек сетки 3×3 (ряд*3+колонка).
 L=['','4','08','048','0268','02468','036258'];
 // Рисовалка «пикселей»: один пиксель скина — k×k пикселей canvas.
@@ -80,25 +81,25 @@ r(D[2],o+2,1,16,1);r(D[2],o+1,2,1,16);r(D[3],o+3,19,16,1);r(D[3],o+19,3,1,16);
 L[v].split('').forEach(function(c){var x=o+4+5*(c%3),y=4+5*(c/3|0);r(D[4],x,y,3,3);r(D[5],x,y,1,1)})})}
 // Стакан 16×18, как в Cup.tsx. G.c: блик, тело, тень, обводка; в строке — цвет и прямоугольник.
 function cup(){var r=px('c',4);[[3,4,0,8,1],[3,3,1,10,4],[3,2,5,12,8],[3,1,13,14,5],[1,4,1,8,4],[1,3,5,10,8],[1,2,13,12,4],[0,4,1,2,4],[0,3,5,2,8],[0,2,13,2,3],[2,11,2,1,3],[2,12,5,1,8],[2,13,13,1,4],[2,2,15,12,1]].forEach(function(q){r(G.c[q[0]],q[1],q[2],q[3],q[4])})}
-function tm(s){s=Math.max(0,s|0);var h=s/3600|0,m=s%3600/60|0;return h?h+' ч '+m+' мин':m?m+' мин':s+' с'}
+function tm(s){s=Math.max(0,s|0);var h=s/3600|0,m=s%3600/60|0;return h?h+'@hours@'+m+'@minutes@':m?m+'@minutes@':s+'@seconds@'}
 function say(t){$('o').textContent=t}
 function load(){try{S=JSON.parse(W.chatData)||{}}catch(e){S={}}if(S.d)dice(S.d)}
 // Показать состояние. Таймер досчитывается на месте, но решает всё равно сервер при броске.
 function show(){var n=Date.now()/1e3,k=$('k');
 while(S.r<3&&S.n&&S.n<=n){S.r++;S.n=S.r<3?S.n+S.t:0}
 // Бонусные броски (S.a) идут сверх трёх по таймеру.
-$('r').textContent=(S.r|0)+' из 3'+(S.a?' +'+S.a:'');
-$('n').textContent=S.r<3&&S.n?'ещё через '+tm(S.n-n):'';
-$('b').textContent=(S.b|0)+' монет';
-$('s').textContent=(S.w|0)+' побед · '+(S.l|0)+' поражений · выиграно '+(S.c|0);
+$('r').textContent=(S.r|0)+'@of3@'+(S.a?' +'+S.a:'');
+$('n').textContent=S.r<3&&S.n?'@nextIn@'+tm(S.n-n):'';
+$('b').textContent=(S.b|0)+'@coins@';
+$('s').textContent=(S.w|0)+'@wins@'+(S.l|0)+'@losses@'+(S.c|0);
 $('g').disabled=B||!(S.r>0||S.a>0);
 // Переброс виден, только когда он есть, и нажимается, только когда его можно применить.
-k.style.display=S.m>0?'':'none';k.textContent='Переброс: '+S.m;k.disabled=B||!S.u;
+k.style.display=S.m>0?'':'none';k.textContent='@reroll@'+S.m;k.disabled=B||!S.u;
 $('z').textContent=S.p||''}
 // Ответ на бросок пришёл (или не пришёл): открыть кубики и сказать, что выпало.
 // Фразу про приз (o.x) целиком составляет сервер: текст в виджете стоит байтов лимита.
 function done(o){B=0;T.className='';
-if(o.e)say(E[o.e]||'Не получилось');
+if(o.e)say(E[o.e]||'@failed@');
 else{dice(o.d);'rnbamu'.split('').forEach(function(k){S[k]=o[k]});say(o.x);W.HapticFeedback.notificationOccurred('success')}
 show()}
 // Запрос боту: «r» — бросок, «m0»–«m2» — переброс кубика. Стакан трясётся не меньше 0,7 с,
@@ -108,7 +109,7 @@ W.request(q).then(function(a){var o;try{o=JSON.parse(a.result)}catch(e){o={e:'FA
 setTimeout(function(){done(o)},Math.max(0,700-(Date.now()-t)))},function(e){done({e:e.code})})}
 $('g').onclick=function(){go('r')};
 // Переброс в два нажатия: сначала кнопка, потом кубик. Холст кубиков шириной 81px, по 27px на кубик.
-$('k').onclick=function(){P=!P;say(P?'Выберите кубик':'')};
+$('k').onclick=function(){P=!P;say(P?'@pickDie@':'')};
 $('d').onclick=function(e){if(P)go('m'+(e.offsetX/27|0))};
 // Кнопки-ссылки: id кнопки совпадает с ключом ссылки в G.u. Если ссылки нет, кнопка не показывается.
 'iaf'.split('').forEach(function(k){var e=$(k),u=G.u[k];if(u)e.onclick=function(){W.openTelegramLink(u)};else e.style.display='none'});
