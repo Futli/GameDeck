@@ -7,6 +7,7 @@ import { HostPanel } from './HostPanel';
 import { PerudoControls } from './perudo/PerudoControls';
 import { perudoView } from './perudo/view';
 import { Table } from './Table';
+import { Coach, Hint, TutorialToggle } from './tutorial/Coach';
 
 const ignore = () => {};
 
@@ -41,10 +42,15 @@ export function RoomScreen({ room }: { room: RoomView }) {
         <button className="ghost" onClick={() => void api.leaveRoom().catch(ignore)}>
           ← Выйти
         </button>
+        <TutorialToggle />
         <button className="code" onClick={() => void copyInvite()} title="Пригласить в комнату">
           {room.code} {copied ? '✓' : tg && telegramAppUrl ? '↗' : '⧉'}
         </button>
       </header>
+      <div className="hint-row">
+        <Hint id="leave" />
+        <Hint id="invite" />
+      </div>
 
       <Table
         room={room}
@@ -53,6 +59,8 @@ export function RoomScreen({ room }: { room: RoomView }) {
         onKick={canEdit ? (id) => void api.kick(id).catch(ignore) : undefined}
       />
 
+      <Coach room={room} myId={myId} />
+
       <div className="actions">
         {perudo && <PerudoControls view={perudo} me={me} myTurn={myTurn} />}
         {myTurn && room.game?.gameId === 'dice-high' && (
@@ -60,6 +68,7 @@ export function RoomScreen({ room }: { room: RoomView }) {
             Бросить кубик
           </button>
         )}
+        {myTurn && room.game?.gameId === 'dice-high' && <Hint id="roll" />}
         {isHost && room.status !== 'playing' && (
           <button
             className="primary big"
@@ -69,6 +78,7 @@ export function RoomScreen({ room }: { room: RoomView }) {
             {room.status === 'finished' ? 'Ещё партию' : 'Начать игру'}
           </button>
         )}
+        {isHost && room.status !== 'playing' && <Hint id="start" />}
         {!isHost && room.status !== 'playing' && <p className="muted">Хост начнёт игру, когда все соберутся</p>}
       </div>
 

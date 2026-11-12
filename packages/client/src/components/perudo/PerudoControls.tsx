@@ -2,6 +2,7 @@ import { assertValidRaise, type PerudoBid, type PerudoView, type PlayerView } fr
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/socket';
 import { Die } from '../Die';
+import { Hint } from '../tutorial/Coach';
 import { bidText, shownReveal } from './view';
 
 const ignore = () => {};
@@ -97,6 +98,7 @@ export function PerudoControls({
               </button>
             ))}
           </div>
+          <Hint id="faces" />
           <div className="pd-stepper">
             <button type="button" disabled={busy || quantity <= 1} onClick={() => setQuantity(quantity - 1)}>
               −
@@ -110,6 +112,7 @@ export function PerudoControls({
               +
             </button>
           </div>
+          <Hint id="quantity" />
           <button
             className="primary big"
             disabled={busy || !valid}
@@ -117,6 +120,7 @@ export function PerudoControls({
           >
             Ставка: {bidText(quantity, face)}
           </button>
+          <Hint id="bid" />
           {prev && (
             <div className="pd-calls">
               <button className="pd-dudo" disabled={busy} onClick={() => send({ type: 'dudo' })}>
@@ -131,6 +135,8 @@ export function PerudoControls({
               </button>
             </div>
           )}
+          {prev && <Hint id="dudo" />}
+          {prev && !view.palifico && <Hint id="calza" />}
           {view.palifico && (
             <p className="muted center">Палифико: единицы не джокеры{prev ? ', номинал менять нельзя' : ''}</p>
           )}
