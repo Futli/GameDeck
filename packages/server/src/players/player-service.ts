@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { parseDiceStyle, type DiceStyle, type SessionInfo } from '@gamedeck/shared';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { parseDiceStyle, type DiceStyle, type MyProfile, type SessionInfo } from '@gamedeck/shared';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
+  coinTransactions,
   items,
   matchPlayers,
   matches,
@@ -156,6 +157,36 @@ export class PlayerService {
       this.equipment(playerId),
     ]);
     return { ...player, stats, recentMatches: recent, equipment };
+  }
+
+  /**
+   * Профиль для главного экрана: имя, баланс и итоги по всем играм.
+   * Монеты считаем по журналу: match_win — выигрыш, match_stake — проигрыш.
+   */
+  async me(playerId: string): Promise<MyProfile | null> {
+    const [player] = await this.db
+      .select({ id: players.id, displayName: players.displayName, avatarUrl: players.avatarUrl, coins: players.coins })
+      .from(players)
+      .where(eq(players.id, playerId));
+    if (!player) return null;
+
+    const [[games], [money]] = await Promise.all([
+      this.db
+        .select({
+          gamesPlayed: sql<number>`coalesce(sum(${playerGameStats.gamesPlayed}), 0)::int`,
+          wins: sql<number>`coalesce(sum(${playerGameStats.wins}), 0)::int`,
+        })
+        .from(playerGameStats)
+        .where(eq(playerGameStats.playerId, playerId)),
+      this.db
+        .select({
+          coinsWon: sql<number>`coalesce(sum(${coinTransactions.amount}) filter (where ${coinTransactions.reason} = 'match_win'), 0)::int`,
+          coinsLost: sql<number>`coalesce(sum(-${coinTransactions.amount}) filter (where ${coinTransactions.reason} = 'match_stake'), 0)::int`,
+        })
+        .from(coinTransactions)
+        .where(and(eq(coinTransactions.playerId, playerId), inArray(coinTransactions.reason, ['match_win', 'match_stake']))),
+    ]);
+    return { ...player, ...games!, ...money! };
   }
 
   /** Аватар из Telegram, если игрок входил через Mini App. */

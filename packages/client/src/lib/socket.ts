@@ -2,6 +2,7 @@ import type {
   AckResult,
   ClientToServerEvents,
   CreateRoomInput,
+  MyProfile,
   JoinRoomInput,
   RoomSummary,
   RoomView,
@@ -46,13 +47,26 @@ fetch('/api/config')
   .catch(() => {});
 socket.on('disconnect', () => setState({ connected: false }));
 
+let sessionToken: string | null = null;
+
+/** Профиль для главного экрана. Ошибку не показываем: без статистики играть можно. */
+function loadProfile(): void {
+  if (!sessionToken) return;
+  fetch('/api/me', { headers: { authorization: `Bearer ${sessionToken}` } })
+    .then((r) => (r.ok ? (r.json() as Promise<MyProfile>) : null))
+    .then((profile) => profile && setState({ profile }))
+    .catch(() => {});
+}
+
 socket.on('session', ({ token, playerId }) => {
   try {
     localStorage.setItem(TOKEN_KEY, token);
   } catch {
     // приватный режим: сессия проживёт до закрытия вкладки
   }
+  sessionToken = token;
   setState({ playerId });
+  loadProfile();
 });
 
 socket.on('room:state', (room) => {
@@ -62,7 +76,11 @@ socket.on('room:state', (room) => {
 });
 
 socket.on('room:kicked', () => setState({ room: null, notice: 'Хост исключил вас из комнаты' }));
-socket.on('match:recorded', (lastMatch) => setState({ lastMatch }));
+socket.on('match:recorded', (lastMatch) => {
+  setState({ lastMatch });
+  // Партия записана — обновляем счётчики игр, побед и монет.
+  loadProfile();
+});
 
 /** Запрос с ответом. Ошибку сервера показываем внизу экрана и пробрасываем дальше. */
 async function call<T>(event: keyof ClientToServerEvents, ...args: unknown[]): Promise<T> {

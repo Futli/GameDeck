@@ -2,6 +2,7 @@ import type { MatchRecord } from '@gamedeck/shared';
 import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { matchPlayers, matches, playerGameStats, players } from '../db/schema.js';
+import { changeCoins, type Tx } from '../db/wallet.js';
 import type { MatchResult } from '../rooms/room.js';
 import { multiplayerElo } from './elo.js';
 
@@ -10,8 +11,8 @@ export class StatsService {
   constructor(private readonly db: Db) {}
 
   /**
-   * Сохранить партию и пересчитать рейтинг. Всё в одной транзакции:
-   * либо записаны и партия, и новые рейтинги, либо ничего.
+   * Сохранить партию, пересчитать рейтинг и рассчитаться по ставке. Всё в одной транзакции:
+   * либо записаны и партия, и новые рейтинги, и монеты, либо ничего.
    */
   async recordMatch(result: MatchResult): Promise<MatchRecord> {
     const ids = result.players.map((p) => p.playerId);
@@ -56,6 +57,7 @@ export class StatsService {
         ratingAfter: next.get(p.playerId)!,
       }));
       await tx.insert(matchPlayers).values(rows);
+      const coins = await settleStake(tx, result, match!.id);
 
       for (const row of rows) {
         await tx
@@ -78,6 +80,7 @@ export class StatsService {
           place,
           ratingBefore,
           ratingAfter,
+          coins: coins.get(playerId) ?? 0,
         })),
       };
     });
@@ -98,4 +101,31 @@ export class StatsService {
       .orderBy(desc(playerGameStats.rating), desc(playerGameStats.wins))
       .limit(limit);
   }
+}
+
+/**
+ * Ставка: каждый проигравший (в том числе ушедший из партии) отдаёт stake монет,
+ * победитель забирает весь банк. Кому не хватает монет, отдаёт сколько есть —
+ * баланс в минус не уходит. Возвращает изменение баланса по игрокам.
+ */
+async function settleStake(tx: Tx, result: MatchResult, matchId: string): Promise<Map<string, number>> {
+  const delta = new Map<string, number>();
+  const { stake, winnerId } = result;
+  if (stake <= 0 || !winnerId || !result.players.some((p) => p.playerId === winnerId)) return delta;
+
+  let pot = 0;
+  for (const { playerId } of result.players) {
+    if (playerId === winnerId) continue;
+    const [row] = await tx.select({ coins: players.coins }).from(players).where(eq(players.id, playerId)).for('update');
+    const paid = Math.min(stake, row?.coins ?? 0);
+    if (paid <= 0) continue;
+    await changeCoins(tx, playerId, -paid, 'match_stake', matchId);
+    delta.set(playerId, -paid);
+    pot += paid;
+  }
+  if (pot > 0) {
+    await changeCoins(tx, winnerId, pot, 'match_win', matchId);
+    delta.set(winnerId, pot);
+  }
+  return delta;
 }

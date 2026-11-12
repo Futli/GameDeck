@@ -83,6 +83,13 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
                   {delta}
                 </span>
               )}
+              {change && change.coins !== 0 && (
+                <span className={change.coins > 0 ? 'delta up' : 'delta down'}>
+                  {' '}
+                  {change.coins > 0 ? '+' : ''}
+                  {change.coins} мон.
+                </span>
+              )}
             </div>
             {onKick && player.id !== myId && (
               <button className="kick" onClick={() => onKick(player.id)} title="Исключить">

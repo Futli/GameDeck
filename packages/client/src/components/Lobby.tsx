@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/socket';
 import { RoomList } from './RoomList';
+import { useClientState } from '../lib/store';
 import { Avatar } from './Avatar';
+import { ProfileStats } from './ProfileCard';
 import { startRoomCode, telegramName, telegramUser } from '../lib/telegram';
 
 const NAME_KEY = 'gamedeck.name';
@@ -22,6 +24,15 @@ export function Lobby() {
   const [needsPassword, setNeedsPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const profile = useClientState((s) => s.profile);
+  const nameEdited = useRef(false);
+
+  // Профиль пришёл с сервера — подставляем сохранённое имя, если игрок ещё ничего не вводил.
+  // «Игрок» — имя по умолчанию у новичка, его не подставляем.
+  useEffect(() => {
+    if (!profile || telegramName || nameEdited.current || profile.displayName === 'Игрок') return;
+    setName(profile.displayName);
+  }, [profile]);
 
   const run = async (action: () => Promise<unknown>) => {
     localStorage.setItem(NAME_KEY, name.trim());
@@ -62,9 +73,19 @@ export function Lobby() {
       ) : (
         <label className="field">
           <span>Ваше имя</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Например, Лёха" />
+          <input
+            value={name}
+            onChange={(e) => {
+              nameEdited.current = true;
+              setName(e.target.value);
+            }}
+            maxLength={24}
+            placeholder="Например, Лёха"
+          />
         </label>
       )}
+
+      {profile && <ProfileStats profile={profile} />}
 
       <label className="field">
         <span>Пароль комнаты (необязательно)</span>
