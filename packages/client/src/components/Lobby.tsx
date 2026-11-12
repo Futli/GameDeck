@@ -18,7 +18,7 @@ function initialCode() {
 let autoJoinDone = false;
 
 export function Lobby() {
-  // В Telegram имя берём из профиля — вводить ничего не нужно.
+  // В Telegram ник по умолчанию — из профиля Telegram; игрок может его поменять.
   const [name, setName] = useState(() => telegramName ?? localStorage.getItem(NAME_KEY) ?? '');
   const [code, setCode] = useState(initialCode);
   const [password, setPassword] = useState('');
@@ -30,9 +30,10 @@ export function Lobby() {
   const nameEdited = useRef(false);
 
   // Профиль пришёл с сервера — подставляем сохранённое имя, если игрок ещё ничего не вводил.
+  // В Telegram это либо ник из Telegram, либо ник, который игрок сменил сам.
   // «Игрок» — имя по умолчанию у новичка, его не подставляем.
   useEffect(() => {
-    if (!profile || telegramName || nameEdited.current || profile.displayName === 'Игрок') return;
+    if (!profile || nameEdited.current || profile.displayName === 'Игрок') return;
     setName(profile.displayName);
   }, [profile]);
 
@@ -50,12 +51,13 @@ export function Lobby() {
     }
   };
 
+  // Ждём профиль: в нём ник, который игрок мог сменить. Вход с ником из Telegram затёр бы его.
   useEffect(() => {
-    if (autoJoinDone || !telegramName || !startRoomCode) return;
+    if (autoJoinDone || !telegramName || !startRoomCode || !profile) return;
     autoJoinDone = true;
-    // Socket.IO придержит запрос, пока соединение не установится.
-    void run(() => api.joinRoom({ code: startRoomCode!, name: telegramName! }));
-  }, []);
+    const savedName = profile.displayName === 'Игрок' ? telegramName : profile.displayName;
+    void run(() => api.joinRoom({ code: startRoomCode!, name: savedName }));
+  }, [profile]);
 
   const join = (e: FormEvent) => {
     e.preventDefault();
@@ -67,14 +69,10 @@ export function Lobby() {
       <h1 className="logo">GameDeck</h1>
       <p className="muted">Кости с друзьями в реальном времени</p>
 
-      {telegramUser ? (
-        <div className="me">
-          <Avatar url={telegramUser.photo_url} name={name} />
-          <span>{name}</span>
-        </div>
-      ) : (
-        <label className="field">
-          <span>Ваше имя</span>
+      <label className="field">
+        <span>Ваше имя</span>
+        <div className="name-row">
+          {telegramUser && <Avatar url={telegramUser.photo_url} name={name} />}
           <input
             value={name}
             onChange={(e) => {
@@ -84,8 +82,8 @@ export function Lobby() {
             maxLength={24}
             placeholder="Например, Лёха"
           />
-        </label>
-      )}
+        </div>
+      </label>
 
       {profile && <ProfileStats profile={profile} />}
 

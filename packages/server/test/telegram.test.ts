@@ -4,7 +4,13 @@ import { io as connect, type Socket } from 'socket.io-client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { PlayerService } from '../src/players/player-service.js';
-import { InitDataError, signInitData, verifyInitData, type TelegramUser } from '../src/telegram/init-data.js';
+import {
+  InitDataError,
+  displayNameOf,
+  signInitData,
+  verifyInitData,
+  type TelegramUser,
+} from '../src/telegram/init-data.js';
 import { testDatabase } from './helpers.js';
 
 const BOT_TOKEN = '123456:TEST-token';
@@ -73,11 +79,50 @@ describe('игрок из Telegram', () => {
     expect(profile).toMatchObject({ displayName: 'Алексей Тестов', avatarUrl: null });
   });
 
+  it('ник по умолчанию — username из Telegram, иначе имя и фамилия', () => {
+    expect(displayNameOf(tgUser({ username: 'lyokha' }))).toBe('lyokha');
+    expect(displayNameOf(tgUser())).toBe('Лёха Тестов');
+  });
+
+  it('новый игрок получает ник из Telegram и следует за его сменой', async () => {
+    const user = tgUser({ username: 'lyokha' });
+    const { playerId } = await players.resolveTelegram(user, undefined);
+    expect((await players.profile(playerId))?.displayName).toBe('lyokha');
+
+    await players.resolveTelegram({ ...user, username: 'lyokha_new' }, undefined);
+    expect((await players.profile(playerId))?.displayName).toBe('lyokha_new');
+  });
+
+  it('ник, который игрок сменил сам, вход из Telegram не перетирает', async () => {
+    const user = tgUser({ username: 'lyokha' });
+    const { playerId } = await players.resolveTelegram(user, undefined);
+    await players.rename(playerId, 'Кубист');
+
+    await players.resolveTelegram(user, undefined);
+    await players.resolveTelegram({ ...user, username: 'lyokha_new' }, undefined);
+    expect((await players.profile(playerId))?.displayName).toBe('Кубист');
+  });
+
+  it('игрок, вошедший до появления telegram_name, получает свежий ник из Telegram', async () => {
+    const user = tgUser({ username: 'lyokha' });
+    const { playerId } = await players.register({ telegramId: user.id, displayName: 'Лёха Тестов' });
+    await players.resolveTelegram(user, undefined);
+    expect((await players.profile(playerId))?.displayName).toBe('lyokha');
+  });
+
   it('анонимный игрок с токеном привязывается к Telegram и не теряет профиль', async () => {
     const anon = await players.register();
     const linked = await players.resolveTelegram(tgUser(), anon.token);
     expect(linked).toEqual(anon);
     expect(await players.avatarUrl(anon.playerId)).toBe('https://t.me/i/userpic/320/test.jpg');
+    // У анонима было имя по умолчанию — теперь ник из Telegram.
+    expect((await players.profile(anon.playerId))?.displayName).toBe('Лёха Тестов');
+  });
+
+  it('имя, выбранное в браузере, при привязке к Telegram сохраняется', async () => {
+    const anon = await players.register({ displayName: 'Лёха из браузера' });
+    await players.resolveTelegram(tgUser({ username: 'lyokha' }), anon.token);
+    expect((await players.profile(anon.playerId))?.displayName).toBe('Лёха из браузера');
   });
 
   it('чужой токен не перепривязывает уже привязанного игрока', async () => {
