@@ -11,6 +11,7 @@ import type {
   UpdateSettingsInput,
 } from '@gamedeck/shared';
 import { io, type Socket } from 'socket.io-client';
+import { errorText, t } from '../i18n';
 import { getState, setState } from './store';
 import { tg } from './telegram';
 
@@ -37,7 +38,7 @@ socket.on('connect', () => setState({ connected: true }));
 socket.on('connect_error', (err) => {
   // Ошибка из middleware сервера: Socket.IO сам больше не переподключается.
   if (err.message === 'TELEGRAM_AUTH_FAILED') {
-    setState({ notice: 'Не удалось проверить вход через Telegram. Закройте и откройте игру заново.' });
+    setState({ notice: t().app.telegramAuthFailed });
   }
 });
 
@@ -76,7 +77,7 @@ socket.on('room:state', (room) => {
   setState({ room, lastMatch });
 });
 
-socket.on('room:kicked', () => setState({ room: null, notice: 'Хост исключил вас из комнаты' }));
+socket.on('room:kicked', () => setState({ room: null, notice: t().app.kicked }));
 socket.on('match:recorded', (lastMatch) => {
   setState({ lastMatch });
   // Партия записана — обновляем счётчики игр, побед и монет.
@@ -92,7 +93,7 @@ async function call<T>(event: keyof ClientToServerEvents, ...args: unknown[]): P
   ) => Promise<AckResult<T>>;
   const result = await emit(event, ...args);
   if (!result.ok) {
-    setState({ notice: result.error.message });
+    setState({ notice: errorText(result.error.code, result.error.message) });
     throw Object.assign(new Error(result.error.message), { code: result.error.code });
   }
   setState({ notice: null });

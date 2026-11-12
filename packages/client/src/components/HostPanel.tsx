@@ -1,30 +1,33 @@
 import { MAX_PLAYERS, games, type RoomView } from '@gamedeck/shared';
 import { useState } from 'react';
 import { api } from '../lib/socket';
+import { useT } from '../i18n';
+import { gameTitle } from './GamePicker';
 
 /** Настройки комнаты. Видны только хосту и только между партиями. */
 export function HostPanel({ room }: { room: RoomView }) {
   const [password, setPassword] = useState('');
   const { settings } = room;
+  const t = useT();
 
   return (
     <details className="panel">
-      <summary>Настройки комнаты</summary>
+      <summary>{t.settings.title}</summary>
       <label className="field row">
-        <span>Игра</span>
+        <span>{t.settings.game}</span>
         <select
           value={settings.gameId}
           onChange={(e) => void api.updateSettings({ gameId: e.target.value }).catch(() => {})}
         >
           {Object.values(games).map((g) => (
             <option key={g.id} value={g.id}>
-              {g.title}
+              {gameTitle(g.id, t)}
             </option>
           ))}
         </select>
       </label>
       <label className="field row">
-        <span>Игроков максимум</span>
+        <span>{t.settings.maxPlayers}</span>
         <select
           value={settings.maxPlayers}
           onChange={(e) => void api.updateSettings({ maxPlayers: Number(e.target.value) }).catch(() => {})}
@@ -37,7 +40,7 @@ export function HostPanel({ room }: { room: RoomView }) {
         </select>
       </label>
       <label className="field row">
-        <span>Ставка (монеты)</span>
+        <span>{t.settings.stake}</span>
         <input
           type="number"
           min={0}
@@ -53,9 +56,14 @@ export function HostPanel({ room }: { room: RoomView }) {
           setPassword('');
         }}
       >
-        <span>Пароль {settings.hasPassword ? '(установлен)' : '(нет)'}</span>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="новый" />
-        <button>{password ? 'Задать' : 'Снять'}</button>
+        <span>{t.settings.password(settings.hasPassword)}</span>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={t.settings.newPassword}
+        />
+        <button>{password ? t.settings.setPassword : t.settings.removePassword}</button>
       </form>
     </details>
   );

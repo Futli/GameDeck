@@ -2,7 +2,8 @@ import { assertValidRaise, type PerudoBid, type PerudoView, type PlayerView } fr
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/socket';
 import { Die } from '../Die';
-import { bidText, shownReveal } from './view';
+import { useT } from '../../i18n';
+import { shownReveal } from './view';
 
 const ignore = () => {};
 
@@ -38,6 +39,7 @@ export function PerudoControls({
   const [face, setFace] = useState(startFace);
   const [quantity, setQuantity] = useState(() => minQuantity(prev, startFace, view));
   const [busy, setBusy] = useState(false);
+  const t = useT();
 
   // Новая ставка на столе или новый раунд — подставляем ближайшую допустимую.
   const key = `${view.round}:${view.bids.length}`;
@@ -69,7 +71,7 @@ export function PerudoControls({
     <div className="pd-controls">
       {reveal && myHand && myHand.length > 0 && (
         <div className="pd-hand">
-          <span className="muted">Ваши кубики в новом раунде:</span>
+          <span className="muted">{t.perudo.yourNewDice}</span>
           <div className="pd-dice">
             {myHand.map((v, i) => (
               <Die key={i} value={v} size={28} style={me?.dice} skin={me?.skins.dice} />
@@ -79,10 +81,10 @@ export function PerudoControls({
       )}
 
       {myHand === null || myHand?.length === 0 ? (
-        <p className="muted center">Вы выбыли — смотрим, кто победит</p>
+        <p className="muted center">{t.perudo.youAreOut}</p>
       ) : myTurn ? (
         <>
-          <div className="pd-faces" role="radiogroup" aria-label="Номинал">
+          <div className="pd-faces" role="radiogroup" aria-label={t.perudo.faceAria}>
             {[1, 2, 3, 4, 5, 6].map((f) => (
               <button
                 key={f}
@@ -115,28 +117,26 @@ export function PerudoControls({
             disabled={busy || !valid}
             onClick={() => send({ type: 'bid', quantity, face })}
           >
-            Ставка: {bidText(quantity, face)}
+            {t.perudo.bid(t.perudo.bidText(quantity, face))}
           </button>
           {prev && (
             <div className="pd-calls">
               <button className="pd-dudo" disabled={busy} onClick={() => send({ type: 'dudo' })}>
-                Не верю!
+                {t.perudo.dudoButton}
               </button>
               <button
                 disabled={busy || view.palifico}
                 onClick={() => send({ type: 'calza' })}
-                title={view.palifico ? 'В палифико нельзя' : ''}
+                title={view.palifico ? t.perudo.noCalzaInPalifico : ''}
               >
-                Точно!
+                {t.perudo.calzaButton}
               </button>
             </div>
           )}
-          {view.palifico && (
-            <p className="muted center">Палифико: единицы не джокеры{prev ? ', номинал менять нельзя' : ''}</p>
-          )}
+          {view.palifico && <p className="muted center">{t.perudo.palificoRules(prev !== null)}</p>}
         </>
       ) : (
-        <p className="muted center">Ждём ход другого игрока</p>
+        <p className="muted center">{t.perudo.waitTurn}</p>
       )}
     </div>
   );

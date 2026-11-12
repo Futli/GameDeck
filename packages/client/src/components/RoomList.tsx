@@ -1,12 +1,8 @@
-import { games, type RoomSummary } from '@gamedeck/shared';
+import type { RoomSummary } from '@gamedeck/shared';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, socket } from '../lib/socket';
-
-const STATUS_TEXT: Record<RoomSummary['status'], string> = {
-  lobby: 'ждут игроков',
-  playing: 'идёт игра',
-  finished: 'партия окончена',
-};
+import { useT } from '../i18n';
+import { gameTitle } from './GamePicker';
 
 /**
  * Уже созданные комнаты на главной. Сервер присылает их отсортированными:
@@ -21,6 +17,7 @@ export function RoomList({
 }) {
   const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
+  const t = useT();
 
   useEffect(() => {
     const watch = () =>
@@ -45,14 +42,14 @@ export function RoomList({
   const locked = rooms.filter((r) => r.hasPassword);
 
   return (
-    <section className="room-list" aria-label="Комнаты">
-      <div className="divider">Комнаты</div>
-      {rooms.length === 0 && <p className="muted center">Пока никого нет — создайте первую комнату</p>}
-      {!name.trim() && rooms.length > 0 && <p className="muted center">Введите имя, чтобы войти в комнату</p>}
+    <section className="room-list" aria-label={t.rooms.aria}>
+      <div className="divider">{t.rooms.title}</div>
+      {rooms.length === 0 && <p className="muted center">{t.rooms.empty}</p>}
+      {!name.trim() && rooms.length > 0 && <p className="muted center">{t.rooms.enterName}</p>}
       {open.map((room) => (
         <RoomCard key={room.code} room={room} disabled={!name.trim()} onJoin={() => onJoin(room.code)} />
       ))}
-      {locked.length > 0 && <div className="room-list__group">🔒 С паролем</div>}
+      {locked.length > 0 && <div className="room-list__group">{t.rooms.withPassword}</div>}
       {locked.map((room) => (
         <RoomCard
           key={room.code}
@@ -81,6 +78,7 @@ function RoomCard({
   onJoin: (password?: string) => Promise<void>;
 }) {
   const [password, setPassword] = useState('');
+  const t = useT();
   const full = room.players >= room.maxPlayers;
   const canJoin = room.status !== 'playing' && !full;
 
@@ -95,21 +93,21 @@ function RoomCard({
         <div className="room-card__code">{room.code}</div>
         <div className="room-card__info">
           <div>
-            {games[room.gameId]?.title ?? room.gameId}
-            {room.stake > 0 && <span className="muted"> · ставка {room.stake}</span>}
+            {gameTitle(room.gameId, t)}
+            {room.stake > 0 && <span className="muted"> · {t.rooms.stake(room.stake)}</span>}
           </div>
           <div className="muted">
             {room.hostName} · {room.players}/{room.maxPlayers} ·{' '}
-            {full && room.status !== 'playing' ? 'мест нет' : STATUS_TEXT[room.status]}
+            {full && room.status !== 'playing' ? t.rooms.full : t.rooms.status[room.status]}
           </div>
         </div>
         {room.hasPassword ? (
           <button disabled={disabled || !canJoin} onClick={onOpen} aria-expanded={opened}>
-            🔒 Войти
+            🔒 {t.rooms.join}
           </button>
         ) : (
           <button className="primary" disabled={disabled || !canJoin} onClick={() => void onJoin()}>
-            Войти
+            {t.rooms.join}
           </button>
         )}
       </div>
@@ -119,12 +117,12 @@ function RoomCard({
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Пароль комнаты"
+            placeholder={t.rooms.passwordPlaceholder}
             maxLength={32}
             autoFocus
           />
           <button className="primary" disabled={disabled || !password}>
-            Войти
+            {t.rooms.join}
           </button>
         </form>
       )}
