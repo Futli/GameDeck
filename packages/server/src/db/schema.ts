@@ -10,6 +10,7 @@ import {
   smallint,
   text,
   timestamp,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -244,3 +245,77 @@ export const widgetPlayers = pgTable('widget_players', {
   messageId: integer('message_id'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─── Сгенерированные скины ──────────────────────────────────────────────────
+
+/**
+ * Скин — уникальная вещь, а не строка каталога: у каждого свой seed, по которому
+ * генератор из @gamedeck/shared рисует коврик, кубики или стакан. Картинки в базе нет,
+ * только (kind, seed, rarity, version). У скина один владелец, и его можно передать.
+ */
+export const skins = pgTable(
+  'skins',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Порядковый номер для витрины: «Неоновая чешуя № 1042». */
+    serial: integer('serial').generatedAlwaysAsIdentity().notNull(),
+    /** mat | dice | cup */
+    kind: text('kind').notNull(),
+    seed: integer('seed').notNull(),
+    /** common | rare | epic */
+    rarity: text('rarity').notNull(),
+    /** Версия генератора (SKIN_GENERATOR_VERSION), которой скин нарисован. */
+    version: smallint('version').notNull(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    /** Откуда взялся: drop (виджет), reward (приз недели), admin. */
+    source: text('source').notNull(),
+    /** false — привязан к владельцу (например, приз за рейтинг), передать нельзя. */
+    tradable: boolean('tradable').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Два одинаковых скина не бывает: seed уникален в пределах вида и версии генератора.
+    unique('skins_kind_seed_version_unique').on(t.kind, t.seed, t.version),
+    index('skins_owner_idx').on(t.ownerId),
+  ],
+);
+
+/**
+ * Журнал владения: выпуск (from = null), подарок, позже — продажа за монеты.
+ * Как coin_transactions для монет: по нему видно, откуда скин у игрока и через чьи руки прошёл.
+ */
+export const skinTransfers = pgTable(
+  'skin_transfers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    skinId: uuid('skin_id')
+      .notNull()
+      .references(() => skins.id, { onDelete: 'cascade' }),
+    fromPlayerId: uuid('from_player_id').references(() => players.id, { onDelete: 'set null' }),
+    toPlayerId: uuid('to_player_id').references(() => players.id, { onDelete: 'set null' }),
+    /** mint | gift | sale */
+    reason: text('reason').notNull(),
+    /** Цена в монетах для reason = sale. */
+    priceCoins: integer('price_coins'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('skin_transfers_skin_idx').on(t.skinId, t.createdAt)],
+);
+
+/** Надетые скины: по одному на вид. Скин, ушедший другому игроку, снимается. */
+export const skinEquipment = pgTable(
+  'skin_equipment',
+  {
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    skinId: uuid('skin_id')
+      .notNull()
+      .unique()
+      .references(() => skins.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.playerId, t.kind] })],
+);

@@ -8,6 +8,7 @@ import type { Db } from './db/client.js';
 import { PlayerService } from './players/player-service.js';
 import { RoomManager } from './rooms/room-manager.js';
 import { ShopService } from './shop/shop-service.js';
+import { SkinService } from './skins/skin-service.js';
 import { registerSocketHandlers, type GameServer } from './socket/handlers.js';
 import { StatsService } from './stats/stats-service.js';
 
@@ -39,6 +40,7 @@ export async function buildApp(options: AppOptions) {
   const players = new PlayerService(options.db, options.startingCoins);
   const stats = new StatsService(options.db);
   const shop = new ShopService(options.db);
+  const skins = new SkinService(options.db);
   await shop.syncCatalog();
 
   // Socket.IO вешается на тот же http-сервер, что и Fastify: один порт для всего.
@@ -52,13 +54,14 @@ export async function buildApp(options: AppOptions) {
     io,
     rooms,
     players,
+    skins,
     stats,
     rng: options.rng ?? cryptoRng,
     disconnectGraceMs: options.disconnectGraceMs ?? 60_000,
     telegram: options.telegram,
     log: app.log,
   });
-  registerHttpRoutes(app, { rooms, players, stats, shop, telegramAppUrl: options.telegramAppUrl ?? null });
+  registerHttpRoutes(app, { rooms, players, stats, shop, skins, telegramAppUrl: options.telegramAppUrl ?? null });
   if (options.serveClient) await registerClient(app);
 
   // Перед остановкой HTTP закрываем все сокеты, иначе server.close() будет ждать их вечно.
@@ -68,5 +71,5 @@ export async function buildApp(options: AppOptions) {
     io.engine.close();
   });
 
-  return { app, io, rooms, players, stats, shop };
+  return { app, io, rooms, players, stats, shop, skins };
 }

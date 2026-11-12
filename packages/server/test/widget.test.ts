@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DICE_STYLE, WIDGET_MAX_STORED_ROLLS } from '@gamedeck/shared';
+import { DEFAULT_DICE_STYLE, SKIN_RARITIES, WIDGET_MAX_STORED_ROLLS, generateSkin } from '@gamedeck/shared';
 import {
   buildWidgetHtml,
   encodeWidgetState,
@@ -10,7 +10,7 @@ import {
   type WidgetSkins,
 } from '../src/widget/build.js';
 import { createDemoPlayer, demoState, playDemoRoll } from '../src/widget/demo.js';
-import { assertValidMat, countMatRuns, feltMat, MAT_MAX_RUNS, type MatSkin } from '../src/widget/mat.js';
+import { assertValidMat, countMatRuns, feltMat, matFromSkin, MAT_MAX_RUNS, type MatSkin } from '../src/widget/mat.js';
 
 const skins: WidgetSkins = { mat: feltMat(), dice: DEFAULT_DICE_STYLE, cup: 'red' };
 const links: WidgetLinks = {
@@ -33,6 +33,15 @@ function noisyMat(): MatSkin {
 }
 
 describe('коврик виджета', () => {
+  it('любой сгенерированный коврик влезает в виджет с запасом по отрезкам', () => {
+    for (const rarity of SKIN_RARITIES)
+      for (let i = 0; i < 200; i++) {
+        const mat = matFromSkin(generateSkin({ kind: 'mat', seed: i * 7919 + 3, rarity }).render(), '#ff2d3d');
+        expect(() => assertValidMat(mat)).not.toThrow();
+        expect(countMatRuns(mat)).toBeLessThan(MAT_MAX_RUNS * 0.95);
+      }
+  });
+
   it('коврик по умолчанию проходит проверку и укладывается в лимит команд canvas', () => {
     const mat = feltMat();
     expect(() => assertValidMat(mat)).not.toThrow();

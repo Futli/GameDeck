@@ -19,6 +19,7 @@ describe('RoomManager', () => {
         seat: 0,
         color: 'red',
         dice: DEFAULT_DICE_STYLE,
+        skins: {},
         avatarUrl: null,
         isHost: true,
         connected: true,

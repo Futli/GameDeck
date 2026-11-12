@@ -1,4 +1,5 @@
 import type { DiceStyle } from './dice-style.js';
+import type { SkinKind, SkinSeed } from './skins/index.js';
 import type {
   ColorInput,
   CreateRoomInput,
@@ -20,6 +21,8 @@ export interface PlayerView {
   color: PlayerColor;
   /** Скин кубиков: надетый предмет из магазина (слот dice). */
   dice: DiceStyle;
+  /** Надетые сгенерированные скины: клиент рисует их по seed. Чего нет — рисуется по умолчанию. */
+  skins: EquippedSkins;
   /** Аватар из Telegram; null — игрок из браузера или Telegram не отдал фото. */
   avatarUrl: string | null;
   isHost: boolean;
@@ -137,4 +140,27 @@ export interface MyProfile {
 export interface SocketData {
   playerId: string;
   token: string;
+}
+
+/** Надетые скины по видам: только то, из чего генератор нарисует картинку. */
+export type EquippedSkins = Partial<Record<SkinKind, SkinSeed>>;
+
+/** Скин в инвентаре или на витрине. */
+export interface SkinView extends SkinSeed {
+  id: string;
+  /** Порядковый номер выпуска: «№ 1042». */
+  serial: number;
+  name: string;
+  /** false — привязан к владельцу, передать нельзя. */
+  tradable: boolean;
+  equipped: boolean;
+  createdAt: string;
+}
+
+export interface SkinTransferView {
+  reason: 'mint' | 'gift' | 'sale';
+  fromPlayerId: string | null;
+  toPlayerId: string | null;
+  priceCoins: number | null;
+  createdAt: string;
 }

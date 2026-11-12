@@ -7,6 +7,8 @@
  * отлично сжимается zlib (в пиксель-арте много повторов), а виджет рисует её
  * на canvas прямоугольниками — по одному на отрезок одинаковых пикселей в строке.
  */
+import { resolvePalette, type PixelImage } from '@gamedeck/shared';
+
 export const MAT_WIDTH = 128;
 export const MAT_HEIGHT = 64;
 const MAX_COLORS = 16;
@@ -127,4 +129,16 @@ export function feltMat(): MatSkin {
   canvas.diamond(MAT_WIDTH / 2, MAT_HEIGHT / 2, 17, GOLD_DARK, false);
 
   return { palette: ['#1f7a4d', '#1a6a43', '#0f3d27', '#e6c15a', '#a8862f'], pixels: canvas.toPixels() };
+}
+
+/**
+ * Сгенерированный коврик (генератор скинов из @gamedeck/shared) в формат виджета:
+ * цвет игрока подставляется в палитру, номер цвета — одним hex-символом.
+ */
+export function matFromSkin(image: PixelImage, playerColor: string): MatSkin {
+  return {
+    // Пустой цвет у коврика не встречается (он без прозрачности), но палитра должна быть валидной.
+    palette: resolvePalette(image, playerColor).map((color) => color || '#000000'),
+    pixels: Array.from(image.pixels, (color) => color.toString(16)).join(''),
+  };
 }

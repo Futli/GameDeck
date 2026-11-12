@@ -1,6 +1,7 @@
 import type React from 'react';
 import { PLAYER_COLOR_HEX, games, type DiceHighState, type MatchRecord, type RoomView } from '@gamedeck/shared';
 import { isSidePosition, screenPosition, seatsWithPlayers } from '../lib/table';
+import { skinImageUrl } from '../lib/skins';
 import { Avatar } from './Avatar';
 import { Die } from './Die';
 import { PerudoCenter } from './perudo/PerudoCenter';
@@ -69,16 +70,22 @@ export function Table({ room, myId, lastMatch, onKick }: Props) {
               .join(' ')}
           >
             <div
-              className="mat"
+              className={player.skins.mat ? 'mat mat--skin' : 'mat'}
               style={
                 {
                   '--light': PLAYER_COLOR_HEX[player.color].light,
                   '--main': PLAYER_COLOR_HEX[player.color].main,
                   '--shade': PLAYER_COLOR_HEX[player.color].shade,
+                  // Сгенерированный коврик — картинкой; на боковых местах он повёрнут вдоль края.
+                  backgroundImage: player.skins.mat
+                    ? `url(${skinImageUrl(player.skins.mat, { playerColor: PLAYER_COLOR_HEX[player.color].main, rotated: !!side })})`
+                    : undefined,
                 } as React.CSSProperties
               }
             >
-              {rolls[player.id] !== undefined && <Die value={rolls[player.id]!} style={player.dice} />}
+              {rolls[player.id] !== undefined && (
+                <Die value={rolls[player.id]!} style={player.dice} skin={player.skins.dice} />
+              )}
               {perudo && room.status !== 'lobby' && <PerudoMat view={perudo} player={player} myId={myId} />}
             </div>
             <div className="seat-name">
