@@ -11,7 +11,9 @@ services:
       - '443:443'
       - '443:443/udp' # HTTP/3
     environment:
-      DOMAIN: ${DOMAIN:?укажите DOMAIN в .env}
+      # Адрес, на котором Caddy принимает запросы. По умолчанию домен: Caddy сам получает сертификат.
+      # За внешним reverse proxy с HTTPS: SITE_ADDRESS=:80, тогда здесь только http.
+      SITE_ADDRESS: ${SITE_ADDRESS:-${DOMAIN:?укажите DOMAIN в .env}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data # сертификаты Let's Encrypt, терять нельзя
