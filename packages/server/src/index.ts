@@ -10,6 +10,10 @@ const { app } = await buildApp({
   serveClient: true,
   logger: { level: config.logLevel },
   disconnectGraceMs: config.disconnectGraceMs,
+  telegramAppUrl: config.telegramAppUrl,
+  telegram: config.telegramBotToken
+    ? { botToken: config.telegramBotToken, maxAgeSec: config.telegramInitDataMaxAgeSec }
+    : undefined,
 });
 
 // Корректная остановка по Ctrl+C / systemd: закрыть сокеты, затем HTTP.

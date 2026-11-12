@@ -1,18 +1,30 @@
-import type { MatchRecord, RoomView } from '@gamedeck/shared';
+import type { MatchRecord, MyProfile, RoomView } from '@gamedeck/shared';
 import { useSyncExternalStore } from 'react';
 
 /** Всё, что клиент знает о мире. Источник правды — сервер, здесь только последнее, что он прислал. */
 export interface ClientState {
   connected: boolean;
   playerId: string | null;
+  /** Свой профиль: имя, баланс и статистика. null — ещё не загрузился. */
+  profile: MyProfile | null;
   room: RoomView | null;
   /** Итог последней партии с изменением рейтинга. */
   lastMatch: MatchRecord | null;
   /** Короткое сообщение внизу экрана: ошибка или «вас исключили». */
   notice: string | null;
+  /** https://t.me/<бот>/<приложение> из /api/config; null — приглашаем ссылкой на сайт. */
+  telegramAppUrl: string | null;
 }
 
-let state: ClientState = { connected: false, playerId: null, room: null, lastMatch: null, notice: null };
+let state: ClientState = {
+  connected: false,
+  playerId: null,
+  profile: null,
+  room: null,
+  lastMatch: null,
+  notice: null,
+  telegramAppUrl: null,
+};
 const listeners = new Set<() => void>();
 
 export function setState(patch: Partial<ClientState>): void {

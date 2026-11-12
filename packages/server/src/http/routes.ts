@@ -12,6 +12,7 @@ export interface HttpDeps {
   players: PlayerService;
   stats: StatsService;
   shop: ShopService;
+  telegramAppUrl: string | null;
 }
 
 const itemBodySchema = z.object({ itemId: z.string().min(1) });
@@ -50,6 +51,8 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
 
   /** Список комнат для главной: сначала без пароля, потом с паролем. */
   app.get('/api/rooms', async () => ({ rooms: rooms.list() }));
+  /** Настройки, которые клиент узнаёт при старте. Так один и тот же образ работает с любым ботом. */
+  app.get('/api/config', async () => ({ telegramAppUrl: deps.telegramAppUrl }));
 
   app.get<{ Params: { code: string } }>('/api/rooms/:code', async (request, reply) => {
     const parsed = roomCodeSchema.safeParse(request.params.code);
@@ -73,6 +76,13 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
   app.get<{ Params: { id: string } }>('/api/players/:id', async (request) => {
     const id = z.uuid().parse(request.params.id);
     const profile = await players.profile(id);
+    if (!profile) throw new AppError('PLAYER_NOT_FOUND', 'Игрок не найден');
+    return profile;
+  });
+
+  /** Свой профиль: имя для формы входа и статистика на главном экране. */
+  app.get('/api/me', async (request) => {
+    const profile = await players.me(await requirePlayer(request));
     if (!profile) throw new AppError('PLAYER_NOT_FOUND', 'Игрок не найден');
     return profile;
   });

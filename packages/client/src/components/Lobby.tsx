@@ -1,23 +1,40 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../lib/socket';
 import { GamePicker, loadGameChoice, saveGameChoice } from './GamePicker';
 import { RoomList } from './RoomList';
+import { useClientState } from '../lib/store';
+import { Avatar } from './Avatar';
+import { ProfileStats } from './ProfileCard';
+import { startRoomCode, telegramName, telegramUser } from '../lib/telegram';
 
 const NAME_KEY = 'gamedeck.name';
 
 function initialCode() {
-  // Ссылка-приглашение выглядит как /?room=K7M2Q
-  return new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
+  // Приглашение в браузере — /?room=K7M2Q, в Telegram — t.me/<бот>/<приложение>?startapp=K7M2Q.
+  return startRoomCode ?? new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
 }
 
+/** Пришли по приглашению из Telegram — сразу садимся за стол. Один раз, даже в StrictMode. */
+let autoJoinDone = false;
+
 export function Lobby() {
-  const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? '');
+  // В Telegram имя берём из профиля — вводить ничего не нужно.
+  const [name, setName] = useState(() => telegramName ?? localStorage.getItem(NAME_KEY) ?? '');
   const [code, setCode] = useState(initialCode);
   const [password, setPassword] = useState('');
   const [needsPassword, setNeedsPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [gameId, setGameId] = useState(loadGameChoice);
   const [busy, setBusy] = useState(false);
+  const profile = useClientState((s) => s.profile);
+  const nameEdited = useRef(false);
+
+  // Профиль пришёл с сервера — подставляем сохранённое имя, если игрок ещё ничего не вводил.
+  // «Игрок» — имя по умолчанию у новичка, его не подставляем.
+  useEffect(() => {
+    if (!profile || telegramName || nameEdited.current || profile.displayName === 'Игрок') return;
+    setName(profile.displayName);
+  }, [profile]);
 
   const run = async (action: () => Promise<unknown>) => {
     localStorage.setItem(NAME_KEY, name.trim());
@@ -33,6 +50,13 @@ export function Lobby() {
     }
   };
 
+  useEffect(() => {
+    if (autoJoinDone || !telegramName || !startRoomCode) return;
+    autoJoinDone = true;
+    // Socket.IO придержит запрос, пока соединение не установится.
+    void run(() => api.joinRoom({ code: startRoomCode!, name: telegramName! }));
+  }, []);
+
   const join = (e: FormEvent) => {
     e.preventDefault();
     void run(() => api.joinRoom({ code, name, ...(password ? { password } : {}) }));
@@ -43,10 +67,27 @@ export function Lobby() {
       <h1 className="logo">GameDeck</h1>
       <p className="muted">Кости с друзьями в реальном времени</p>
 
-      <label className="field">
-        <span>Ваше имя</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Например, Лёха" />
-      </label>
+      {telegramUser ? (
+        <div className="me">
+          <Avatar url={telegramUser.photo_url} name={name} />
+          <span>{name}</span>
+        </div>
+      ) : (
+        <label className="field">
+          <span>Ваше имя</span>
+          <input
+            value={name}
+            onChange={(e) => {
+              nameEdited.current = true;
+              setName(e.target.value);
+            }}
+            maxLength={24}
+            placeholder="Например, Лёха"
+          />
+        </label>
+      )}
+
+      {profile && <ProfileStats profile={profile} />}
 
       <div className="field">
         <span>Во что играем</span>

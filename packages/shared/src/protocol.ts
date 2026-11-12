@@ -20,6 +20,8 @@ export interface PlayerView {
   color: PlayerColor;
   /** Скин кубиков: надетый предмет из магазина (слот dice). */
   dice: DiceStyle;
+  /** Аватар из Telegram; null — игрок из браузера или Telegram не отдал фото. */
+  avatarUrl: string | null;
   isHost: boolean;
   connected: boolean;
 }
@@ -103,7 +105,32 @@ export interface ServerToClientEvents {
 export interface MatchRecord {
   matchId: string;
   gameId: string;
-  players: Array<{ playerId: string; place: number; ratingBefore: number; ratingAfter: number }>;
+  players: Array<{
+    playerId: string;
+    place: number;
+    ratingBefore: number;
+    ratingAfter: number;
+    /** Сколько монет игрок получил (+) или отдал (−) по ставке этой партии. */
+    coins: number;
+  }>;
+}
+
+/**
+ * Профиль текущего игрока для главного экрана (GET /api/me).
+ * Счётчики суммируются по всем играм; новичок получает нули.
+ */
+export interface MyProfile {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  /** Текущий баланс монет. */
+  coins: number;
+  gamesPlayed: number;
+  wins: number;
+  /** Всего выиграно монет на ставках. */
+  coinsWon: number;
+  /** Всего проиграно монет на ставках (положительное число). */
+  coinsLost: number;
 }
 
 /** Данные, которые Socket.IO хранит на каждом сокете (socket.data). */

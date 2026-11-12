@@ -54,6 +54,10 @@ fi
 PUBLIC_IP=$(curl -fsS --max-time 5 https://ipv4.icanhazip.com 2>/dev/null || true)
 DEFAULT_DOMAIN=${PUBLIC_IP:+${PUBLIC_IP//./-}.sslip.io}
 ask DOMAIN "Домен игры (A-запись на белый IP; без домена подойдёт IP-через-дефисы.sslip.io)" "${DEFAULT_DOMAIN:-gamedeck.example.com}"
+# Внешний прокси: 80/443 уже держит другой Caddy/nginx, он же делает HTTPS.
+# Тогда внутренний Caddy слушает только http на 80, иначе запросы пойдут по кругу.
+ask EXTERNAL_PROXY "HTTPS делает внешний reverse proxy, а в контейнере нужен только http? (y/n)" "n"
+case $EXTERNAL_PROXY in [yYдД]*) SITE_ADDRESS=":80" ;; *) SITE_ADDRESS="$DOMAIN" ;; esac
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-$(openssl rand -hex 24)}
 
 # --- 2. Шаблон Debian ---
@@ -116,7 +120,7 @@ ok "Контейнер запущен"
 # --- 4. Docker и GameDeck внутри ---
 msg "Ставлю Docker и GameDeck (несколько минут)"
 pct exec "$CTID" -- env \
-  DOMAIN="$DOMAIN" POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  DOMAIN="$DOMAIN" SITE_ADDRESS="$SITE_ADDRESS" POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
   REPO_URL="$REPO_URL" BRANCH="$BRANCH" COMPOSE_VERSION="$COMPOSE_VERSION" \
   bash -s <<'SETUP'
 set -euo pipefail
@@ -148,7 +152,7 @@ fi
 cd /opt/gamedeck/deploy
 if [[ ! -f .env ]]; then
   umask 077
-  printf 'DOMAIN=%s\nPOSTGRES_PASSWORD=%s\n' "$DOMAIN" "$POSTGRES_PASSWORD" > .env
+  printf 'DOMAIN=%s\nSITE_ADDRESS=%s\nPOSTGRES_PASSWORD=%s\n' "$DOMAIN" "$SITE_ADDRESS" "$POSTGRES_PASSWORD" > .env
 fi
 
 # Готовый образ из GHCR, если он доступен; иначе собираем из исходников.
@@ -169,15 +173,22 @@ SETUP
 ok "GameDeck запущен"
 
 CT_IP=$(pct exec "$CTID" -- hostname -I | awk '{print $1}')
+if [[ $SITE_ADDRESS == ":80" ]]; then
+  NEXT_STEPS="Осталось: во внешнем прокси направить $DOMAIN на http://$CT_IP:80.
+Порты на роутере на контейнер НЕ пробрасывать: их держит внешний прокси.
+Проверить: https://$DOMAIN/api/health"
+else
+  NEXT_STEPS="Осталось:
+  1. На роутере пробросить на $CT_IP порты 80/tcp, 443/tcp и 443/udp.
+  2. Домен $DOMAIN должен указывать на белый IP${PUBLIC_IP:+ ($PUBLIC_IP)}.
+  3. Проверить: https://$DOMAIN/api/health
+     Сертификат Caddy получит сам, как только заработают пп. 1–2."
+fi
 cat <<EOF
 
 Готово. Контейнер $CTID ($CT_HOSTNAME), локальный IP: $CT_IP
 
-Осталось:
-  1. На роутере пробросить на $CT_IP порты 80/tcp, 443/tcp и 443/udp.
-  2. Домен $DOMAIN должен указывать на белый IP${PUBLIC_IP:+ ($PUBLIC_IP)}.
-  3. Проверить: https://$DOMAIN/api/health
-     Сертификат Caddy получит сам, как только заработают пп. 1–2.
+$NEXT_STEPS
 
 Логи:       pct exec $CTID -- docker compose -f /opt/gamedeck/deploy/compose.yml logs -f
 Пароль базы лежит в /opt/gamedeck/deploy/.env внутри контейнера.
