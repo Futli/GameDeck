@@ -7,6 +7,7 @@ export * from './dice-high.js';
 export * from './perudo.js';
 
 /** Реестр игр: новая игра = новый модуль + строчка здесь. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- реестр разнотипных игр, ход проверяет moveSchema конкретной игры
 export const games: Record<string, GameModule<any, any>> = {
   [diceHigh.id]: diceHigh,
   [perudo.id]: perudo,
