@@ -71,3 +71,16 @@ export function ditherTone(value: number, count: number, x: number, y: number): 
   const base = Math.floor(scaled);
   return Math.min(count - 1, base + (scaled - base > bayer(x, y) ? 1 : 0));
 }
+
+/**
+ * Как ditherTone, но сетка Байера только в узкой полосе на границе тонов, остальное — сплошной
+ * заливкой. Коврик в виджете рисуется отрезками одного цвета, и их не больше 3500 на картинку:
+ * сплошной дизеринг по всему полю этот бюджет съедает.
+ */
+export function bandTone(value: number, count: number, x: number, y: number): number {
+  const scaled = Math.min(Math.max(value, 0), 1) * (count - 1);
+  const base = Math.floor(scaled);
+  const frac = scaled - base;
+  const step = frac < 0.42 ? 0 : frac > 0.58 ? 1 : (frac - 0.42) / 0.16 > bayer(x, y) ? 1 : 0;
+  return Math.min(count - 1, base + step);
+}

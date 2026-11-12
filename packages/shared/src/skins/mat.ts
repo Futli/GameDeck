@@ -1,5 +1,5 @@
 import { PLAYER_SLOT, createImage, setPixel, type PixelImage } from './image.js';
-import { bayer, ditherTone, fbm, pixelNoise, valueNoise, type Rng } from './random.js';
+import { bandTone, fbm, pixelNoise, valueNoise, type Rng } from './random.js';
 import { pickPalette, type Gender, type SkinRarity } from './themes.js';
 
 export const MAT_WIDTH = 128;
@@ -31,7 +31,7 @@ const PATTERNS: Record<string, PatternDef> = {
     // Сукно: мягкие пятна ворса, переходы дизерингом.
     make: (rng, seed) => {
       const cell = rng.range(10, 18);
-      return (x, y) => B(1 + ditherTone(fbm(x, y, cell, seed), 3, x, y));
+      return (x, y) => B(1 + bandTone(fbm(x, y, cell, seed), 3, x, y));
     },
   },
   stripes: {
@@ -81,7 +81,7 @@ const PATTERNS: Record<string, PatternDef> = {
     make: (rng, seed) => {
       const cell = rng.range(14, 24);
       return (x, y) => {
-        const weave = (x >> 1) % 2 === (y >> 1) % 2;
+        const weave = (x >> 2) % 2 === (y >> 2) % 2;
         const tone = valueNoise(x, y, cell, seed) > 0.5 ? 1 : 0;
         return B(weave ? 2 + tone : 1 + tone);
       };
@@ -95,7 +95,7 @@ const PATTERNS: Record<string, PatternDef> = {
       const warp = rng.range(6, 12);
       return (x, y) => {
         const v = Math.sin((y + fbm(x, y, 24, seed) * warp) * freq + x * 0.02);
-        return B(1 + ditherTone((v + 1) / 2, 3, x, y));
+        return B(1 + bandTone((v + 1) / 2, 3, x, y));
       };
     },
   },
@@ -113,10 +113,10 @@ const PATTERNS: Record<string, PatternDef> = {
       return (x, y) => {
         const h = band(y);
         const v = band(x);
-        if (h === 1 || v === 1) return (x + y) % 2 ? A(2) : B(2);
+        if (h === 1 || v === 1) return (x + y) % 4 < 2 ? A(2) : B(2);
         // Пересечение широких полос — тёмное, как плетение настоящей шотландки.
         if (h === 2 && v === 2) return B(0);
-        if (h === 2 || v === 2) return (x + y) % 2 ? B(1) : B(2);
+        if (h === 2 || v === 2) return B(1);
         return B(3);
       };
     },
@@ -236,7 +236,7 @@ const PATTERNS: Record<string, PatternDef> = {
         const v = Math.abs(Math.sin((x + y * 0.6) * freq + fbm(x, y, 20, seed) * warp * 0.2));
         if (v < 0.05) return M(2);
         if (v < 0.12) return A(2);
-        return B(1 + ditherTone(fbm(x, y, 28, seed + 7), 3, x, y));
+        return B(1 + bandTone(fbm(x, y, 28, seed + 7), 3, x, y));
       };
     },
   },
@@ -250,8 +250,8 @@ const PATTERNS: Record<string, PatternDef> = {
         if (star > 0.992) return SPARKLE;
         if (star > 0.982) return A(3);
         const neb = fbm(x, y, cell, seed);
-        if (neb > 0.62) return A(ditherTone((neb - 0.62) / 0.3, 3, x, y));
-        return B(ditherTone(neb / 0.62, 3, x, y));
+        if (neb > 0.62) return A(bandTone((neb - 0.62) / 0.3, 3, x, y));
+        return B(bandTone(neb / 0.62, 3, x, y));
       };
     },
   },
@@ -266,7 +266,7 @@ const PATTERNS: Record<string, PatternDef> = {
         const a = Math.atan2(dy, dx) / (Math.PI * 2) + 0.5;
         const ray = Math.floor(a * rays) % 2;
         const r = Math.hypot(dx, dy) / 64;
-        const tone = ditherTone(1 - r, 3, x, y);
+        const tone = bandTone(1 - r, 3, x, y);
         return ray ? A(tone) : B(1 + Math.min(tone, 2));
       };
     },
@@ -288,8 +288,7 @@ const PATTERNS: Record<string, PatternDef> = {
         const edge = d2 - d1;
         if (edge < 1.2) return A(3);
         if (edge < 2.4) return A(2);
-        if (edge < 4) return A(ditherTone(0.3, 2, x, y));
-        return B(ditherTone(Math.min(d1 / 30, 1), 3, x, y));
+        return B(bandTone(Math.min(d1 / 30, 1), 3, x, y));
       };
     },
   },
@@ -356,8 +355,10 @@ export function generateMat(rng: Rng, seed: number, rarity: SkinRarity): MatSkin
   for (let y = 0; y < MAT_HEIGHT; y++)
     for (let x = 0; x < MAT_WIDTH; x++) {
       let color = pattern(x, y);
+      // Тень от рамки: две сплошные полосы, без дизеринга (бюджет отрезков в виджете).
       const d = edgeDistance(x, y) - frame;
-      if (d < 6 && bayer(x, y) < ((6 - d) / 6) * 0.6) color = darker(color);
+      if (d < 2) color = darker(color);
+      if (d < 1) color = darker(color);
       setPixel(image, x, y, color);
     }
 
