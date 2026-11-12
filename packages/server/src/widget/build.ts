@@ -52,6 +52,11 @@ export interface WidgetState {
   w: number;
   l: number;
   c: number;
+  /** Бонусные броски сверх запаса (за друзей). */
+  a: number;
+  /** Сколько у игрока перебросов и можно ли применить один к последнему броску (1 или 0). */
+  m: number;
+  u: number;
   /** Кубики последнего броска. */
   d?: WidgetDice;
   /** Строка про приз недели. */
@@ -59,7 +64,8 @@ export interface WidgetState {
 }
 
 /**
- * Ответ бота на запрос броска — то, что получает виджет из TelegramWidget.request().
+ * Ответ бота на запрос броска («r») или переброса кубика («m0»–«m2») — то, что получает
+ * виджет из TelegramWidget.request(). У переброса c — сколько монет он добавил.
  * Имена короткие по той же причине, что и у WidgetState: лимит 1 КБ.
  */
 export type WidgetRollAnswer =
@@ -72,10 +78,14 @@ export type WidgetRollAnswer =
       r: number;
       n: number;
       b: number;
-      /** Что выпало сверх монет, готовой фразой. */
-      x?: string;
+      /** Бонусные броски, перебросы и можно ли применить переброс — как в WidgetState. */
+      a: number;
+      m: number;
+      u: number;
+      /** Фраза под кубиками целиком: событие, монеты и что выпало сверх них. Текст в виджете стоит байтов лимита. */
+      x: string;
     }
-  | { e: 'NO_ROLLS' };
+  | { e: 'NO_ROLLS' | 'NO_MOD' };
 
 export function measureWidget(html: string): { bytes: number; packed: number } {
   const raw = Buffer.from(html, 'utf8');

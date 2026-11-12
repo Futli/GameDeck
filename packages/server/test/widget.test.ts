@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DICE_STYLE, SKIN_RARITIES, WIDGET_MAX_STORED_ROLLS, generateSkin } from '@gamedeck/shared';
+import { DEFAULT_DICE_STYLE, SKIN_RARITIES, generateSkin } from '@gamedeck/shared';
 import {
   buildWidgetHtml,
   encodeWidgetState,
@@ -9,7 +9,6 @@ import {
   type WidgetLinks,
   type WidgetSkins,
 } from '../src/widget/build.js';
-import { createDemoPlayer, demoState, playDemoRoll } from '../src/widget/demo.js';
 import {
   assertValidMat,
   countMatRuns,
@@ -103,38 +102,8 @@ describe('сборка HTML виджета', () => {
   });
 
   it('отклоняет состояние больше 1 КБ', () => {
-    const state = demoState(createDemoPlayer(500), 1000, 60);
+    const state: WidgetState = { r: 3, n: 0, t: 60, b: 500, w: 0, l: 0, c: 0, a: 0, m: 0, u: 0 };
     expect(encodeWidgetState(state).length).toBeLessThan(200);
     expect(() => encodeWidgetState({ ...state, p: 'я'.repeat(600) })).toThrow();
-  });
-});
-
-describe('бросок в прототипе', () => {
-  // Генератор, который всегда даёт шестёрки.
-  const sixes = () => 0.99;
-
-  it('тратит бросок, начисляет монеты и запускает таймер', () => {
-    const { player, answer } = playDemoRoll(createDemoPlayer(500), 1000, sixes, 60);
-    expect(answer).toEqual({
-      d: [6, 6, 6],
-      o: 'triple',
-      c: 90,
-      r: WIDGET_MAX_STORED_ROLLS - 1,
-      n: 1060,
-      b: 590,
-      x: 'Выпал эпический скин',
-    });
-    expect(demoState(player, 1000, 60)).toMatchObject({ r: 2, n: 1060, t: 60, b: 590, d: [6, 6, 6] });
-  });
-
-  it('отказывает, когда бросков нет, и возвращает их по таймеру', () => {
-    let player = createDemoPlayer(0);
-    for (let i = 0; i < WIDGET_MAX_STORED_ROLLS; i++) player = playDemoRoll(player, 1000, sixes, 60).player;
-
-    const refused = playDemoRoll(player, 1001, sixes, 60);
-    expect(refused.answer).toEqual({ e: 'NO_ROLLS' });
-    expect(refused.player.coins).toBe(270);
-
-    expect(playDemoRoll(refused.player, 1060, sixes, 60).answer).toMatchObject({ r: 0, b: 360 });
   });
 });

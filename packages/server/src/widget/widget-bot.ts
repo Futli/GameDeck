@@ -6,7 +6,7 @@ import type { SkinService } from '../skins/skin-service.js';
 import { BotApiError, type BotApi } from './bot-api.js';
 import { buildWidgetHtml, encodeWidgetState, type WidgetRollAnswer } from './build.js';
 import { feltMat, matFromSkin } from './mat.js';
-import type { WidgetService } from './widget-service.js';
+import { referralCode, type WidgetService } from './widget-service.js';
 
 const userSchema = z.object({
   id: z.number().int().positive(),
@@ -22,6 +22,7 @@ const updateSchema = z.object({
     .object({
       chat: z.object({ id: z.number().int(), type: z.string() }),
       from: userSchema.optional(),
+      text: z.string().optional(),
     })
     .optional(),
   widget_query: z
@@ -64,7 +65,8 @@ export class WidgetBot {
   /** Прервать паузу между попытками: нужен, чтобы остановка сервера её не ждала. */
   private wake: (() => void) | null = null;
   private stopped: Promise<void> = Promise.resolve();
-  private inviteUrl: string | null = null;
+  /** Ссылка на бота, https://t.me/<имя>: узнаётся у Telegram один раз. */
+  private botUrl: string | null = null;
   private readonly now: () => number;
 
   constructor(private readonly options: WidgetBotOptions) {
@@ -91,11 +93,7 @@ export class WidgetBot {
     let retryMs = RETRY_MIN_MS;
     while (this.running) {
       try {
-        if (this.inviteUrl === null) {
-          const me = await api.call<{ username: string }>('getMe', {});
-          this.inviteUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${me.username}`)}`;
-          log.info({ bot: me.username }, 'widget bot started');
-        }
+        if (this.botUrl === null) log.info({ bot: await this.resolveBotUrl() }, 'widget bot started');
         // timeout 5 секунд, а не 25: при остановке сервера не приходится долго ждать ответа.
         const updates = await api.call<unknown[]>('getUpdates', { offset, timeout: 5 }, 15_000);
         retryMs = RETRY_MIN_MS;
@@ -132,6 +130,14 @@ export class WidgetBot {
     }
   }
 
+  private async resolveBotUrl(): Promise<string> {
+    if (this.botUrl === null) {
+      const me = await this.options.api.call<{ username: string }>('getMe', {});
+      this.botUrl = `https://t.me/${me.username}`;
+    }
+    return this.botUrl;
+  }
+
   /** Обработать одно обновление. Открыт для тестов: они подают обновления без сети. */
   async handleUpdate(update: Update): Promise<void> {
     if (update.message) await this.onMessage(update.message);
@@ -144,14 +150,24 @@ export class WidgetBot {
     if (message.chat.type !== 'private' || !message.from) return;
 
     const playerId = await players.ensureTelegramPlayer(message.from);
+    // Переход по реферальной ссылке приходит как «/start ref_…».
+    const startParam = /^\/start\s+(\S+)/.exec(message.text ?? '')?.[1];
+    if (startParam) await widget.setReferrer(playerId, startParam);
+
     // HTML у отправленного виджета не меняется, поэтому скины подставляются в момент отправки.
     // Надетый сгенерированный коврик рисуется тем же генератором, что и на столе; без него — сукно.
     // Тесты держат любой коврик в 4 КБ виджета, но если генератор когда-нибудь выйдет за лимит,
     // игрок получит виджет с сукном, а не ошибку.
     const equipped = await skins.equipped(playerId);
     const dice = await players.diceStyle(playerId);
-    // Реклама и приглашения с наградой ещё не сделаны: кнопка рекламы скрыта, «позвать друга» делится ботом.
-    const links = { invite: this.inviteUrl, ad: null, findGame: appUrl };
+    // «Позвать друга» открывает «Поделиться» с личной ссылкой игрока: по ней бот узнаёт, кто пригласил.
+    // Реклама ещё не сделана, её кнопка скрыта.
+    const referral = `${await this.resolveBotUrl()}?start=${referralCode(playerId)}`;
+    const links = {
+      invite: `https://t.me/share/url?url=${encodeURIComponent(referral)}`,
+      ad: null,
+      findGame: appUrl,
+    };
     let html: string;
     try {
       const mat = equipped.mat
@@ -183,10 +199,28 @@ export class WidgetBot {
 
     let answer: WidgetRollAnswer | { e: 'FAILED' } = { e: 'FAILED' };
     try {
-      // «r» — бросок, других запросов у виджета пока нет.
+      // «r» — бросок, «m0»–«m2» — переброс кубика с этим номером.
+      const reroll = /^m([0-2])$/.exec(query.data);
       if (query.data === 'r') answer = await widget.roll(playerId, this.now());
+      else if (reroll) answer = await widget.reroll(playerId, Number(reroll[1]), this.now());
     } finally {
       await api.call('answerWidgetQuery', { widget_query_id: query.id, data: JSON.stringify(answer) });
+    }
+
+    // Первый бросок приглашённого приносит бонусные броски ему и пригласившему.
+    // Пригласивший не нажимал ничего, поэтому его виджет обновляется через chat_data.
+    const referrer = query.data === 'r' && !('e' in answer) ? await widget.claimReferral(playerId, this.now()) : null;
+    if (referrer) {
+      await api
+        .call('editMessageWidgetData', {
+          chat_id: referrer.chatId,
+          message_id: referrer.messageId,
+          chat_data: encodeWidgetState(await widget.state(referrer.playerId, this.now())),
+        })
+        .catch((error: unknown) => {
+          // Награда уже в базе; не обновился старый виджет — игрок увидит её в следующем.
+          this.options.log.warn({ err: error }, 'widget bot: referrer widget was not refreshed');
+        });
     }
 
     // Ответ видит только нажавший виджет и только сейчас. Чтобы состояние пережило
