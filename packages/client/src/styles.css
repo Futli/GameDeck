@@ -68,6 +68,19 @@ input, select {
 .field.row > input, .field.row > select { width: 120px; }
 .divider { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
 .join { display: flex; flex-direction: column; gap: 10px; }
+.center { text-align: center; margin: 0; }
+.room-list { display: flex; flex-direction: column; gap: 8px; }
+.room-list__group { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+.room-card { background: var(--surface); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.room-card--busy { opacity: 0.6; }
+.room-card__main { display: flex; align-items: center; gap: 12px; }
+.room-card__code {
+  font-family: ui-monospace, monospace; font-size: 1.5rem; font-weight: 700; letter-spacing: 0.15em;
+  color: var(--accent); background: var(--surface-2); padding: 4px 8px; border-radius: 8px;
+}
+.room-card__info { flex: 1; min-width: 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+.room-card__password { display: flex; gap: 8px; }
+.room-card__password input { flex: 1; min-width: 0; }
 .code-input { text-align: center; font-size: 1.6rem; letter-spacing: 0.3em; text-transform: uppercase; }
 
 /* Профиль из Telegram вместо поля «Ваше имя». */

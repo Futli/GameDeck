@@ -3,6 +3,7 @@ import type {
   ClientToServerEvents,
   CreateRoomInput,
   JoinRoomInput,
+  RoomSummary,
   RoomView,
   ServerToClientEvents,
   UpdateSettingsInput,
@@ -89,6 +90,8 @@ export const api = {
   },
   updateSettings: (input: UpdateSettingsInput) => call<RoomView>('room:settings', input),
   kick: (playerId: string) => call<RoomView>('room:kick', { playerId }),
+  watchRooms: () => call<RoomSummary[]>('rooms:watch'),
+  unwatchRooms: () => call<null>('rooms:unwatch'),
   startGame: () => call<RoomView>('game:start'),
   roll: () => call<RoomView>('game:move', { type: 'roll' }),
 };

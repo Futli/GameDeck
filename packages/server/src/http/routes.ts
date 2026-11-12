@@ -49,6 +49,8 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
 
   app.get('/api/health', async () => ({ ok: true, rooms: rooms.size }));
 
+  /** Список комнат для главной: сначала без пароля, потом с паролем. */
+  app.get('/api/rooms', async () => ({ rooms: rooms.list() }));
   /** Настройки, которые клиент узнаёт при старте. Так один и тот же образ работает с любым ботом. */
   app.get('/api/config', async () => ({ telegramAppUrl: deps.telegramAppUrl }));
 
