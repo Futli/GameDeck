@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { WIDGET_MAX_STORED_ROLLS, type Rng } from '@gamedeck/shared';
+import { PLAYER_COLOR_HEX, WIDGET_MAX_STORED_ROLLS, generateSkin, type Rng } from '@gamedeck/shared';
 import { eq } from 'drizzle-orm';
 import { coinTransactions, playerItems, widgetPlayers } from '../src/db/schema.js';
 import { PlayerService } from '../src/players/player-service.js';
 import { ShopService } from '../src/shop/shop-service.js';
+import { SkinService } from '../src/skins/skin-service.js';
 import type { BotApi } from '../src/widget/bot-api.js';
 import { measureWidget, WIDGET_MAX_PACKED, type WidgetState } from '../src/widget/build.js';
+import { matFromSkin } from '../src/widget/mat.js';
 import { WidgetBot } from '../src/widget/widget-bot.js';
 import { WidgetService } from '../src/widget/widget-service.js';
 import { testDatabase } from './helpers.js';
@@ -23,8 +25,9 @@ async function setup(rng: Rng, intervalSec = 60) {
   await new ShopService(db).syncCatalog();
   const players = new PlayerService(db, 500);
   const widget = new WidgetService(db, players, rng, intervalSec);
+  const skins = new SkinService(db);
   const user = { id: nextTelegramId++, first_name: 'Лёха' };
-  return { db, players, widget, user, playerId: await players.ensureTelegramPlayer(user) };
+  return { db, players, skins, widget, user, playerId: await players.ensureTelegramPlayer(user) };
 }
 
 describe('бросок в виджете с настоящим профилем', () => {
@@ -94,9 +97,17 @@ describe('бот с виджетом', () => {
   const log = { info() {}, warn() {}, error() {} };
 
   it('на сообщение в личке присылает виджет, а на запрос броска отвечает и обновляет состояние', async () => {
-    const { db, players, widget, user, playerId } = await setup(diceRng(4, 4, 4));
+    const { db, players, skins, widget, user, playerId } = await setup(diceRng(4, 4, 4));
     const { api, calls } = fakeApi();
-    const bot = new WidgetBot({ api, players, widget, appUrl: 'https://t.me/example_bot/play', log, now: () => 1000 });
+    const bot = new WidgetBot({
+      api,
+      players,
+      skins,
+      widget,
+      appUrl: 'https://t.me/example_bot/play',
+      log,
+      now: () => 1000,
+    });
 
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: user } });
     const sent = calls[0]!;
@@ -119,10 +130,23 @@ describe('бот с виджетом', () => {
     expect(JSON.parse(edit!.params.chat_data as string)).toMatchObject({ r: 2, b: 560, d: [4, 4, 4] });
   });
 
-  it('не отвечает в группах и отвечает ошибкой на незнакомый запрос', async () => {
-    const { players, widget, user } = await setup(diceRng(1, 2, 4));
+  it('надетый сгенерированный коврик едет в виджет вместо сукна и влезает в лимит', async () => {
+    const { players, skins, widget, user, playerId } = await setup(diceRng(1, 2, 4));
+    const mat = await skins.mint(playerId, 'mat', 'epic', { source: 'admin' });
+    await skins.equip(playerId, mat.id);
     const { api, calls } = fakeApi();
-    const bot = new WidgetBot({ api, players, widget, appUrl: null, log, now: () => 1000 });
+    const bot = new WidgetBot({ api, players, skins, widget, appUrl: null, log, now: () => 1000 });
+
+    await bot.handleUpdate({ update_id: 1, message: { chat: { id: 7, type: 'private' }, from: user } });
+    const html = calls[0]!.params.html as string;
+    expect(html).toContain(matFromSkin(generateSkin(mat).render(), PLAYER_COLOR_HEX.red.main).pixels);
+    expect(measureWidget(html).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
+  });
+
+  it('не отвечает в группах и отвечает ошибкой на незнакомый запрос', async () => {
+    const { players, skins, widget, user } = await setup(diceRng(1, 2, 4));
+    const { api, calls } = fakeApi();
+    const bot = new WidgetBot({ api, players, skins, widget, appUrl: null, log, now: () => 1000 });
 
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: -9, type: 'group' }, from: user } });
     expect(calls).toHaveLength(0);

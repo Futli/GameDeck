@@ -3,7 +3,7 @@ import { bandTone, fbm, pixelNoise, valueNoise, type Rng } from './random.js';
 import { pickPalette, type Gender, type SkinRarity } from './themes.js';
 
 export const MAT_WIDTH = 128;
-export const MAT_HEIGHT = 64;
+export const MAT_HEIGHT = 96;
 
 // Номера цветов в палитре коврика.
 const B = (tone: number) => 1 + tone; // основной тон 0..4
@@ -38,7 +38,7 @@ const PATTERNS: Record<string, PatternDef> = {
     noun: 'полоска',
     gender: 'f',
     make: (rng) => {
-      const width = rng.pick([4, 6, 8]);
+      const width = rng.pick([6, 8]);
       const dir = rng.pick([1, -1]);
       return (x, y) => {
         const band = Math.floor((x + dir * y + 256) / width) % 2;
@@ -81,7 +81,7 @@ const PATTERNS: Record<string, PatternDef> = {
     make: (rng, seed) => {
       const cell = rng.range(14, 24);
       return (x, y) => {
-        const weave = (x >> 2) % 2 === (y >> 2) % 2;
+        const weave = (x >> 3) % 2 === (y >> 2) % 2;
         const tone = valueNoise(x, y, cell, seed) > 0.5 ? 1 : 0;
         return B(weave ? 2 + tone : 1 + tone);
       };
@@ -103,7 +103,7 @@ const PATTERNS: Record<string, PatternDef> = {
     noun: 'шотландка',
     gender: 'f',
     make: (rng) => {
-      const period = rng.pick([16, 24, 32]);
+      const period = rng.pick([24, 32]);
       const wide = rng.pick([4, 6]);
       const line = rng.int(period - wide - 4) + wide + 2;
       const band = (v: number) => {
@@ -113,7 +113,7 @@ const PATTERNS: Record<string, PatternDef> = {
       return (x, y) => {
         const h = band(y);
         const v = band(x);
-        if (h === 1 || v === 1) return (x + y) % 4 < 2 ? A(2) : B(2);
+        if (h === 1 || v === 1) return A(2);
         // Пересечение широких полос — тёмное, как плетение настоящей шотландки.
         if (h === 2 && v === 2) return B(0);
         if (h === 2 || v === 2) return B(1);
@@ -125,7 +125,7 @@ const PATTERNS: Record<string, PatternDef> = {
     noun: 'волна',
     gender: 'f',
     make: (rng) => {
-      const period = rng.pick([8, 10, 12]);
+      const period = rng.pick([16, 20]);
       const amp = rng.range(2, 4);
       const len = rng.range(10, 18);
       return (x, y) => {
@@ -140,8 +140,8 @@ const PATTERNS: Record<string, PatternDef> = {
   scales: {
     noun: 'чешуя',
     gender: 'f',
-    make: (rng) => {
-      const r = rng.pick([6, 8]);
+    make: () => {
+      const r = 12;
       return (x, y) => {
         const row = Math.floor(y / r);
         const ox = (row % 2) * r;
@@ -155,15 +155,15 @@ const PATTERNS: Record<string, PatternDef> = {
   argyle: {
     noun: 'ромбы',
     gender: 'pl',
-    make: (rng) => {
-      const w = rng.pick([16, 24]);
+    make: () => {
+      const w = 32;
       const h = w;
       return (x, y) => {
         const u = Math.abs((x % w) - w / 2 + 0.5) / (w / 2) + Math.abs((y % h) - h / 2 + 0.5) / (h / 2);
         const cell = (Math.floor(x / w) + Math.floor(y / h)) % 2;
         // Пунктир по диагоналям — «стежок» акцентом.
         const diag = (x + y) % w === 0 || (x - y + 512) % w === 0;
-        if (diag && x % 2 === 0) return A(2);
+        if (diag) return A(2);
         if (u < 1) return cell ? B(3) : B(1);
         return B(2);
       };
@@ -173,8 +173,8 @@ const PATTERNS: Record<string, PatternDef> = {
     noun: 'ёлочка',
     gender: 'f',
     make: (rng) => {
-      const period = rng.pick([8, 12]);
-      const width = rng.pick([8, 16]);
+      const period = 16;
+      const width = rng.pick([16, 20]);
       return (x, y) => {
         const zig = Math.abs((x % (width * 2)) - width);
         const p = (y + zig + 256) % period;
@@ -186,8 +186,8 @@ const PATTERNS: Record<string, PatternDef> = {
   honeycomb: {
     noun: 'соты',
     gender: 'pl',
-    make: (rng) => {
-      const size = rng.pick([6, 7, 9]);
+    make: () => {
+      const size = 13;
       const r3 = Math.sqrt(3);
       return (x, y) => {
         // Пиксель → осевые координаты шестиугольной сетки → центр ближайшей соты.
@@ -234,9 +234,9 @@ const PATTERNS: Record<string, PatternDef> = {
       const warp = rng.range(18, 30);
       return (x, y) => {
         const v = Math.abs(Math.sin((x + y * 0.6) * freq + fbm(x, y, 20, seed) * warp * 0.2));
-        if (v < 0.05) return M(2);
-        if (v < 0.12) return A(2);
-        return B(1 + bandTone(fbm(x, y, 28, seed + 7), 3, x, y));
+        if (v < 0.06) return M(2);
+        if (v < 0.1) return A(2);
+        return valueNoise(x, y, 40, seed + 7) > 0.5 ? B(2) : B(1);
       };
     },
   },
@@ -244,14 +244,16 @@ const PATTERNS: Record<string, PatternDef> = {
     noun: 'космос',
     gender: 'm',
     make: (rng, seed) => {
-      const cell = rng.range(18, 30);
+      const cell = rng.range(30, 44);
       return (x, y) => {
+        // Звёзды редкие, а туманность — крупные пятна в два-три тона: пёстрый космос
+        // не влезает в 4 КБ виджета.
         const star = pixelNoise(x, y, seed + 3);
-        if (star > 0.992) return SPARKLE;
-        if (star > 0.982) return A(3);
-        const neb = fbm(x, y, cell, seed);
-        if (neb > 0.62) return A(bandTone((neb - 0.62) / 0.3, 3, x, y));
-        return B(bandTone(neb / 0.62, 3, x, y));
+        if (star > 0.996) return SPARKLE;
+        if (star > 0.99) return A(3);
+        const neb = valueNoise(x, y, cell, seed);
+        if (neb > 0.66) return neb > 0.8 ? A(2) : A(1);
+        return neb > 0.4 ? B(1) : B(0);
       };
     },
   },
@@ -259,14 +261,15 @@ const PATTERNS: Record<string, PatternDef> = {
     noun: 'сияние',
     gender: 'n',
     make: (rng) => {
-      const rays = rng.pick([12, 16, 20]);
+      const rays = rng.pick([8, 12]);
       return (x, y) => {
         const dx = x - MAT_WIDTH / 2 + 0.5;
-        const dy = (y - MAT_HEIGHT / 2 + 0.5) * 2;
+        const dy = ((y - MAT_HEIGHT / 2 + 0.5) * MAT_WIDTH) / MAT_HEIGHT;
         const a = Math.atan2(dy, dx) / (Math.PI * 2) + 0.5;
         const ray = Math.floor(a * rays) % 2;
         const r = Math.hypot(dx, dy) / 64;
-        const tone = bandTone(1 - r, 3, x, y);
+        // Три кольца яркости без дизеринга: свет от центра стола.
+        const tone = r < 0.4 ? 2 : r < 0.8 ? 1 : 0;
         return ray ? A(tone) : B(1 + Math.min(tone, 2));
       };
     },
@@ -276,7 +279,7 @@ const PATTERNS: Record<string, PatternDef> = {
     gender: 'm',
     make: (rng) => {
       // Ячейки Вороного: трещины между ними светятся акцентом, как лава между плитами.
-      const points = Array.from({ length: 14 }, () => [rng.range(0, MAT_WIDTH), rng.range(0, MAT_HEIGHT)] as const);
+      const points = Array.from({ length: 10 }, () => [rng.range(0, MAT_WIDTH), rng.range(0, MAT_HEIGHT)] as const);
       return (x, y) => {
         let d1 = Infinity;
         let d2 = Infinity;
@@ -287,8 +290,8 @@ const PATTERNS: Record<string, PatternDef> = {
         }
         const edge = d2 - d1;
         if (edge < 1.2) return A(3);
-        if (edge < 2.4) return A(2);
-        return B(bandTone(Math.min(d1 / 30, 1), 3, x, y));
+        if (edge < 2.2) return A(2);
+        return B(1);
       };
     },
   },
@@ -335,7 +338,7 @@ export interface MatSkin {
   adjectives: [string, string, string, string];
 }
 
-/** Коврик 128×64: фон-узор, виньетка, рамка по редкости, нитка цвета игрока, детали. */
+/** Коврик 128×96: фон-узор, виньетка, рамка по редкости, нитка цвета игрока, детали. */
 export function generateMat(rng: Rng, seed: number, rarity: SkinRarity): MatSkin {
   const palette = pickPalette(rng, rarity);
   const image = createImage(MAT_WIDTH, MAT_HEIGHT, [
@@ -355,10 +358,9 @@ export function generateMat(rng: Rng, seed: number, rarity: SkinRarity): MatSkin
   for (let y = 0; y < MAT_HEIGHT; y++)
     for (let x = 0; x < MAT_WIDTH; x++) {
       let color = pattern(x, y);
-      // Тень от рамки: две сплошные полосы, без дизеринга (бюджет отрезков в виджете).
+      // Тень от рамки: сплошная полоса, без дизеринга (бюджет отрезков в виджете).
       const d = edgeDistance(x, y) - frame;
       if (d < 2) color = darker(color);
-      if (d < 1) color = darker(color);
       setPixel(image, x, y, color);
     }
 

@@ -20,11 +20,11 @@ export const WIDGET_SOURCE = String.raw`<style>
 *{box-sizing:border-box;margin:0}
 #w{display:flex;flex-wrap:wrap;gap:8px;padding:8px;font:13px/1.3 system-ui,sans-serif;color:var(--tg-theme-text-color,#222)}
 #l{width:176px;display:flex;flex-direction:column;gap:5px}
-#t{position:relative;height:135px;padding:8px;border-radius:10px;background:#14523a}
+#t{position:relative;height:175px;padding:8px;border-radius:10px;background:#14523a}
 canvas{display:block}
-#m{width:160px;height:80px}
-#d{position:absolute;left:22px;top:35px;width:81px}
-#c{position:absolute;left:128px;top:32px;width:28px}
+#m{width:160px;height:120px}
+#d{position:absolute;left:22px;top:55px;width:81px}
+#c{position:absolute;left:128px;top:52px;width:28px}
 .s #d{visibility:hidden}
 .s #c{animation:k .7s}
 @keyframes k{15%,85%{transform:translate(-72px,-2px)}30%,60%{transform:translate(-80px,-7px) rotate(-8deg)}45%,75%{transform:translate(-64px,-7px) rotate(8deg)}}
@@ -41,7 +41,7 @@ button:disabled{opacity:.5}
 <div id=w>
 <div id=l>
 <div id=t>
-<canvas id=m width=384 height=192></canvas>
+<canvas id=m width=384 height=288></canvas>
 <canvas id=d width=276 height=84></canvas>
 <canvas id=c width=64 height=72></canvas>
 <button id=g>Бросить</button>
@@ -71,7 +71,7 @@ L=['','4','08','048','0268','02468','036258'];
 // Рисовалка «пикселей»: один пиксель скина — k×k пикселей canvas.
 function px(i,k){var g=$(i).getContext('2d');return function(f,x,y,w,h){g.fillStyle=f;g.fillRect(x*k,y*k,w*k,h*k)}}
 // Коврик: по одному прямоугольнику на отрезок одинаковых пикселей в строке.
-function mat(){var r=px('m',3),x,y,j,o;for(y=0;y<64;y++)for(x=0;x<128;x=j){o=y*128;for(j=x+1;j<128&&G.m[o+j]==G.m[o+x];j++);r(G.p[parseInt(G.m[o+x],16)],x,y,j-x,1)}}
+function mat(){var r=px('m',3),x,y,j,o;for(y=0;y<96;y++)for(x=0;x<128;x=j){o=y*128;for(j=x+1;j<128&&G.m[o+j]==G.m[o+x];j++);r(G.p[parseInt(G.m[o+x],16)],x,y,j-x,1)}}
 // Три кубика на сетке 21×21, как в Die.tsx клиента. G.d: обводка, грань, блик, тень, точки, блик точки.
 function dice(a){var r=px('d',4),D=G.d;a.forEach(function(v,i){var o=i*24;
 r(D[0],o+1,0,19,21);r(D[0],o,1,21,19);r(D[1],o+2,1,17,19);r(D[1],o+1,2,19,17);
