@@ -39,7 +39,12 @@ export function RoomScreen({ room }: { room: RoomView }) {
         </button>
       </header>
 
-      <Table room={room} myId={myId} lastMatch={lastMatch} onKick={canEdit ? (id) => void api.kick(id).catch(ignore) : undefined} />
+      <Table
+        room={room}
+        myId={myId}
+        lastMatch={lastMatch}
+        onKick={canEdit ? (id) => void api.kick(id).catch(ignore) : undefined}
+      />
 
       <div className="actions">
         {myTurn && (

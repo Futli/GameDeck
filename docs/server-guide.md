@@ -51,8 +51,8 @@ Socket.IO позволяет типизировать события. Описы
 ```ts
 export interface ClientToServerEvents {
   'room:create': (input: CreateRoomInput, ack: Ack<RoomView>) => void;
-  'room:join':   (input: JoinRoomInput,   ack: Ack<RoomView>) => void;
-  'game:move':   (input: MoveInput,       ack: Ack<RoomView>) => void;
+  'room:join': (input: JoinRoomInput, ack: Ack<RoomView>) => void;
+  'game:move': (input: MoveInput, ack: Ack<RoomView>) => void;
   // ...
 }
 
@@ -82,8 +82,8 @@ TypeScript проверяет типы только при сборке. По с
 
 ```ts
 export const joinRoomSchema = z.object({
-  code: roomCodeSchema,          // 5 символов, приводится к верхнему регистру
-  name: playerNameSchema,        // 1..24 символа, обрезаются пробелы
+  code: roomCodeSchema, // 5 символов, приводится к верхнему регистру
+  name: playerNameSchema, // 1..24 символа, обрезаются пробелы
   password: z.string().max(32).optional(),
 });
 
@@ -98,13 +98,13 @@ export type JoinRoomInput = z.input<typeof joinRoomSchema>;
 
 ```ts
 interface GameModule<State, Move> {
-  moveSchema: z.ZodType<Move>;                    // какие ходы бывают в этой игре
+  moveSchema: z.ZodType<Move>; // какие ходы бывают в этой игре
   start(playerIds, rng): State;
   currentPlayer(state): string | null;
-  applyMove(state, playerId, move, rng): State;  // ошибка, если ход недопустим
+  applyMove(state, playerId, move, rng): State; // ошибка, если ход недопустим
   removePlayer(state, playerId): State;
   winner(state): string | null;
-  viewFor?(state, viewerId): unknown;             // что можно показать этому игроку
+  viewFor?(state, viewerId): unknown; // что можно показать этому игроку
 }
 ```
 
@@ -165,12 +165,15 @@ socket.on('session', ({ token }) => localStorage.setItem('token', token));
 Этот слой тонкий: распарсить вход, вызвать комнату, разослать новое состояние. Всю обработку ошибок берёт на себя обёртка `handle`:
 
 ```ts
-socket.on('game:move', handle(([input]) => {
-  const room = requireRoom(rooms, playerId);
-  room.move(playerId, moveSchema.parse(input), rng);
-  broadcast(room);
-  return room.toView();
-}));
+socket.on(
+  'game:move',
+  handle(([input]) => {
+    const room = requireRoom(rooms, playerId);
+    room.move(playerId, moveSchema.parse(input), rng);
+    broadcast(room);
+    return room.toView();
+  }),
+);
 ```
 
 `handle` ловит исключения и превращает их в `{ ok: false, error }`. Ошибки правил (`NOT_YOUR_TURN`) уходят клиенту как есть, ошибки zod становятся `BAD_REQUEST`, а неожиданные пишутся в лог, наружу уходит только общий текст.
@@ -197,9 +200,9 @@ registerHttpRoutes(app, rooms);
 
 HTTP-маршруты:
 
-| Маршрут | Зачем |
-| --- | --- |
-| `GET /api/health` | Проверить, что сервер жив (пригодится для systemd и мониторинга) |
+| Маршрут                | Зачем                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| `GET /api/health`      | Проверить, что сервер жив (пригодится для systemd и мониторинга)                        |
 | `GET /api/rooms/:code` | Превью комнаты по ссылке-приглашению: игра, ставка, сколько мест занято, есть ли пароль |
 
 `index.ts` слушает `SIGINT`/`SIGTERM` и закрывает сервер аккуратно: сначала сокеты, потом HTTP.
@@ -256,7 +259,7 @@ viewFor(state, viewerId) {
 
 ```ts
 await socket.emitWithAck('game:move', { type: 'bid', quantity: 4, face: 5 }); // «четыре пятёрки»
-await socket.emitWithAck('game:move', { type: 'dudo' });                    // «не верю!»
+await socket.emitWithAck('game:move', { type: 'dudo' }); // «не верю!»
 ```
 
 После `dudo`/`calza` в `state.lastReveal` приходят открытые стаканы всех игроков за прошлый раунд: кто сколько выбросил, сколько нашлось, кто потерял кубик. Клиенту этого хватает, чтобы проиграть анимацию открытия стаканов.
