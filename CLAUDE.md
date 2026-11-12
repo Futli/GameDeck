@@ -24,7 +24,8 @@
 
 - **TRASHCAN** — Windows, локальная разработка и локальный Claude Code. Хуки в `.claude/hooks` на Node,
   чтобы работать и там, и в облаке.
-- **Ubuntu-сервер** — боевая сборка для Telegram Mini App (game.lyokha.ru). Не трогать без прямой просьбы,
+- **Сервер у Назара** — боевая сборка для Telegram Mini App (game.lyokha.ru): LXC 201 на Proxmox, установщик
+  `deploy/proxmox/gamedeck-lxc.sh`, конфиг `/opt/gamedeck/deploy/.env`. Не трогать без прямой просьбы,
   `.env` не читать и не коммитить. TLS делает внешний Caddy, 80/443 на контейнер не пробрасывать,
   базовые образы — с `mirror.gcr.io` (Docker Hub из РФ закрыт).
 
