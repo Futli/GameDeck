@@ -102,9 +102,10 @@ docker compose logs -f app              # логи сервера
 ## Шаг 5. Подключить к Telegram
 
 1. В [@BotFather](https://t.me/BotFather): `/newbot`, затем `/newapp` (или Bot Settings → Configure Mini App) и указать `https://ваш-домен`.
-2. Открыть бота в Telegram и запустить приложение.
+2. В `deploy/.env` добавить `BOT_TOKEN` (токен бота) и `TELEGRAM_APP_URL` (`https://t.me/<бот>/<short name>`), затем `docker compose up -d`.
+3. Открыть бота в Telegram и запустить приложение: имя и аватар подтянутся сами.
 
-Платежи Stars и проверка `initData` от Telegram — отдельная задача: бота в коде пока нет.
+Как это устроено и как проверить: [telegram-guide.md](telegram-guide.md). Платежи Stars — отдельная задача.
 
 ## Шаг 6. Обновление
 

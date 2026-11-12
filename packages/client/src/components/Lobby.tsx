@@ -1,15 +1,21 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../lib/socket';
+import { Avatar } from './Avatar';
+import { startRoomCode, telegramName, telegramUser } from '../lib/telegram';
 
 const NAME_KEY = 'gamedeck.name';
 
 function initialCode() {
-  // Ссылка-приглашение выглядит как /?room=K7M2Q
-  return new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
+  // Приглашение в браузере — /?room=K7M2Q, в Telegram — t.me/<бот>/<приложение>?startapp=K7M2Q.
+  return startRoomCode ?? new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
 }
 
+/** Пришли по приглашению из Telegram — сразу садимся за стол. Один раз, даже в StrictMode. */
+let autoJoinDone = false;
+
 export function Lobby() {
-  const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? '');
+  // В Telegram имя берём из профиля — вводить ничего не нужно.
+  const [name, setName] = useState(() => telegramName ?? localStorage.getItem(NAME_KEY) ?? '');
   const [code, setCode] = useState(initialCode);
   const [password, setPassword] = useState('');
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -29,6 +35,13 @@ export function Lobby() {
     }
   };
 
+  useEffect(() => {
+    if (autoJoinDone || !telegramName || !startRoomCode) return;
+    autoJoinDone = true;
+    // Socket.IO придержит запрос, пока соединение не установится.
+    void run(() => api.joinRoom({ code: startRoomCode!, name: telegramName! }));
+  }, []);
+
   const join = (e: FormEvent) => {
     e.preventDefault();
     void run(() => api.joinRoom({ code, name, ...(password ? { password } : {}) }));
@@ -39,10 +52,17 @@ export function Lobby() {
       <h1 className="logo">GameDeck</h1>
       <p className="muted">Кости с друзьями в реальном времени</p>
 
-      <label className="field">
-        <span>Ваше имя</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Например, Лёха" />
-      </label>
+      {telegramUser ? (
+        <div className="me">
+          <Avatar url={telegramUser.photo_url} name={name} />
+          <span>{name}</span>
+        </div>
+      ) : (
+        <label className="field">
+          <span>Ваше имя</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Например, Лёха" />
+        </label>
+      )}
 
       <button className="primary" disabled={busy || !name.trim()} onClick={() => run(() => api.createRoom({ name }))}>
         Создать комнату

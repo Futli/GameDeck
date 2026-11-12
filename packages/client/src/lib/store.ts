@@ -10,9 +10,18 @@ export interface ClientState {
   lastMatch: MatchRecord | null;
   /** Короткое сообщение внизу экрана: ошибка или «вас исключили». */
   notice: string | null;
+  /** https://t.me/<бот>/<приложение> из /api/config; null — приглашаем ссылкой на сайт. */
+  telegramAppUrl: string | null;
 }
 
-let state: ClientState = { connected: false, playerId: null, room: null, lastMatch: null, notice: null };
+let state: ClientState = {
+  connected: false,
+  playerId: null,
+  room: null,
+  lastMatch: null,
+  notice: null,
+  telegramAppUrl: null,
+};
 const listeners = new Set<() => void>();
 
 export function setState(patch: Partial<ClientState>): void {
