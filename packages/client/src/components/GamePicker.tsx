@@ -1,17 +1,18 @@
 import { games } from '@gamedeck/shared';
+import { useT, type Messages } from '../i18n';
 
-/** Коротко о правилах — чтобы было понятно, что выбираешь. */
-const GAME_HINTS: Record<string, string> = {
-  'dice-high': 'Каждый бросает кубик, у кого больше — тот выиграл',
-  perudo: 'Кубики под стаканом, ставки на весь стол и «Не верю!»',
-};
+/** Название игры на языке интерфейса; у игры без перевода — название из реестра. */
+export function gameTitle(gameId: string, t: Messages): string {
+  return t.games[gameId]?.title ?? games[gameId]?.title ?? gameId;
+}
 
 const gameList = Object.values(games);
 
 /** Выбор игры: карточки-кнопки. Новая игра в реестре shared появится здесь сама. */
 export function GamePicker({ value, onChange }: { value: string; onChange: (gameId: string) => void }) {
+  const t = useT();
   return (
-    <div className="game-picker" role="radiogroup" aria-label="Игра">
+    <div className="game-picker" role="radiogroup" aria-label={t.lobby.gameAria}>
       {gameList.map((game) => (
         <button
           key={game.id}
@@ -21,11 +22,9 @@ export function GamePicker({ value, onChange }: { value: string; onChange: (game
           className={value === game.id ? 'game-option game-option--active' : 'game-option'}
           onClick={() => onChange(game.id)}
         >
-          <b>{game.title}</b>
-          {GAME_HINTS[game.id] && <span className="muted">{GAME_HINTS[game.id]}</span>}
-          <span className="muted">
-            {game.minPlayers}–{game.maxPlayers} игроков
-          </span>
+          <b>{gameTitle(game.id, t)}</b>
+          {t.games[game.id] && <span className="muted">{t.games[game.id]!.hint}</span>}
+          <span className="muted">{t.lobby.playersRange(game.minPlayers, game.maxPlayers)}</span>
         </button>
       ))}
     </div>

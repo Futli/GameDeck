@@ -10,6 +10,8 @@ interface TelegramUser {
   last_name?: string;
   username?: string;
   photo_url?: string;
+  /** Язык приложения Telegram у игрока (IETF, например «ru» или «en-US»). */
+  language_code?: string;
 }
 
 /** Цвета текущей темы Telegram. Любое поле может отсутствовать (старые клиенты). */
@@ -108,8 +110,7 @@ export function inviteLink(code: string, telegramAppUrl: string | null): string 
   return telegramAppUrl ? `${telegramAppUrl}?startapp=${code}` : `${location.origin}/?room=${code}`;
 }
 
-/** Открыть системное «Поделиться» Telegram со ссылкой на комнату. */
-export function shareInvite(link: string, code: string): void {
-  const text = `Заходи в GameDeck, комната ${code}`;
+/** Открыть системное «Поделиться» Telegram со ссылкой на комнату и текстом приглашения. */
+export function shareInvite(link: string, text: string): void {
   tg?.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
 }
