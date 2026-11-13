@@ -21,6 +21,7 @@ import type { PlayerService } from '../players/player-service.js';
 import type { SkinService } from '../skins/skin-service.js';
 import type { StatsService } from '../stats/stats-service.js';
 import { InitDataError, verifyInitData } from '../telegram/init-data.js';
+import type { WidgetMessage, WidgetService } from '../widget/widget-service.js';
 
 export type GameServer = Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
@@ -33,6 +34,10 @@ export interface HandlerDeps {
   rng: Rng;
   disconnectGraceMs: number;
   telegram?: { botToken: string; maxAgeSec: number };
+  /** Рефералка: приглашение в комнату засчитывается так же, как реферальная ссылка на бота. */
+  referrals: Pick<WidgetService, 'setReferrerId' | 'claimReferral'>;
+  /** Пригласивший получил награду за друга: бот обновит его виджет. */
+  onReferrerRewarded?: (referrer: WidgetMessage) => void;
   log: FastifyBaseLogger;
 }
 
@@ -59,7 +64,7 @@ function toErrorResult(err: unknown, log: FastifyBaseLogger) {
 
 /** Подключает обработчики событий. Возвращает функцию очистки таймеров (для остановки сервера). */
 export function registerSocketHandlers(deps: HandlerDeps): () => void {
-  const { io, rooms, players, skins, stats, rng, log, telegram } = deps;
+  const { io, rooms, players, skins, stats, rng, log, telegram, referrals, onReferrerRewarded } = deps;
   const leaveTimers = new Map<string, NodeJS.Timeout>();
   /** Один таймер на комнату: ближайший дедлайн (ход, бросок, подтверждение). */
   const roomTimers = new Map<string, NodeJS.Timeout>();
@@ -93,8 +98,23 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
       // Игру не задерживаем ожиданием базы: итог уже у игроков, рейтинг придёт следом.
       stats
         .recordMatch(result)
-        .then((record) => io.to(roomChannel(room.code)).emit('match:recorded', record))
+        .then((record) => {
+          io.to(roomChannel(room.code)).emit('match:recorded', record);
+          return rewardInvites(result.players.map((p) => p.playerId));
+        })
         .catch((err: unknown) => log.error({ err, room: room.code }, 'failed to record match'));
+    }
+  };
+
+  /**
+   * Первая партия приглашённого приносит награду ему и пригласившему, как первый бросок в виджете.
+   * Вызывается после записи партии: claimReferral смотрит, сыграл ли игрок, по записанным партиям.
+   */
+  const rewardInvites = async (playerIds: string[]) => {
+    const now = Math.floor(Date.now() / 1000);
+    for (const id of playerIds) {
+      const referrer = await referrals.claimReferral(id, now);
+      if (referrer) onReferrerRewarded?.(referrer);
     }
   };
 
@@ -224,7 +244,7 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
     socket.on(
       'room:join',
       handle(async ([input]) => {
-        const { code, name, password, color } = joinRoomSchema.parse(input);
+        const { code, name, password, color, invite } = joinRoomSchema.parse(input);
         const [dice, equipped, avatarUrl] = await Promise.all([
           players.diceStyle(playerId),
           skins.equipped(playerId),
@@ -233,6 +253,14 @@ export function registerSocketHandlers(deps: HandlerDeps): () => void {
         const previous = rooms.roomOf(playerId);
         const room = rooms.join({ id: playerId, name, color, dice, skins: equipped, avatarUrl }, code, password);
         saveName(playerId, name);
+        // Пришёл по приглашению — новичку засчитываем пригласившего: владельца реферального кода
+        // из ссылки, а если код комнаты ввели руками — хоста (больше узнать его не у кого).
+        // Сбой рефералки не должен мешать сесть за стол.
+        if (invite) {
+          await (invite === 'code' ? Promise.resolve(room.hostId) : players.playerIdByReferralCode(invite))
+            .then((referrerId) => (referrerId ? referrals.setReferrerId(playerId, referrerId) : false))
+            .catch((err: unknown) => log.error({ err }, 'failed to save room invite referrer'));
+        }
         if (previous && previous !== room) {
           exitRoom(previous.code, playerId);
           broadcast(previous);

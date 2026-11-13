@@ -8,9 +8,14 @@ import type {
   ServerToClientEvents,
   SessionInfo,
 } from '@gamedeck/shared';
+import { eq } from 'drizzle-orm';
 import { io as connect, type Socket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
+import type { Db } from '../src/db/client.js';
+import type { PlayerService } from '../src/players/player-service.js';
+import { widgetPlayers } from '../src/db/schema.js';
+import { REFERRAL_BONUS_ROLLS, type WidgetService } from '../src/widget/widget-service.js';
 import { testDatabase } from './helpers.js';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -19,18 +24,24 @@ type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
 describe('socket protocol', () => {
   let url: string;
   let close: () => Promise<void>;
+  let db: Db;
+  let widget: WidgetService;
+  let players: PlayerService;
   const clients: Client[] = [];
 
   beforeEach(async () => {
     // Каждый бросок = 6, поэтому первый раунд всегда ничья — проверим переброс.
     let roll = 0;
     const faces = [6, 6, 3, 5];
-    const { db } = await testDatabase();
-    const { app } = await buildApp({
+    db = (await testDatabase()).db;
+    const built = await buildApp({
       db,
       rng: () => ((faces[roll++ % faces.length] ?? 1) - 1) / 6,
       disconnectGraceMs: 50,
     });
+    const { app } = built;
+    widget = built.widget;
+    players = built.players;
     await app.listen({ host: '127.0.0.1', port: 0 });
     url = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
     close = () => app.close();
@@ -96,6 +107,59 @@ describe('socket protocol', () => {
     const me = await fetch(`${url}/api/me`, { headers: { authorization: `Bearer ${b.session.token}` } });
     expect(await me.json()).toMatchObject({ displayName: 'Боб', gamesPlayed: 1, wins: 1 });
     expect((await fetch(`${url}/api/me`)).status).toBe(401);
+  });
+
+  /** Кто пригласил игрока (null — никто). */
+  const referrerOf = async (playerId: string) => {
+    const [row] = await db.select().from(widgetPlayers).where(eq(widgetPlayers.playerId, playerId));
+    return row?.referredBy ?? null;
+  };
+  /** Бонусные броски в виджете: ими награждают за приглашённого друга. */
+  const bonusRolls = async (playerId: string) => (await widget.state(playerId, 1000)).a;
+
+  it('новичок по ссылке-приглашению засчитывается поделившемуся, награда — после первой партии', async () => {
+    const host = await client();
+    const sharer = await client();
+    const friend = await client();
+    const created = await call<RoomView>(host.socket.emitWithAck('room:create', { name: 'Алиса' }));
+    await call(sharer.socket.emitWithAck('room:join', { code: created.code, name: 'Вера' }));
+    // Ссылкой поделилась Вера, а не хост: засчитывается она.
+    const invite = await players.referralCode(sharer.session.playerId);
+    await call(friend.socket.emitWithAck('room:join', { code: created.code, name: 'Боб', invite }));
+    expect(await referrerOf(friend.session.playerId)).toBe(sharer.session.playerId);
+    // Сам вход в комнату награды не даёт.
+    expect(await bonusRolls(sharer.session.playerId)).toBe(0);
+
+    // Вера уходит, Алиса и Боб играют партию: 6:6, затем 3:5.
+    await call(sharer.socket.emitWithAck('room:leave'));
+    await call(host.socket.emitWithAck('game:start'));
+    await call(friend.socket.emitWithAck('room:ready'));
+    for (let round = 0; round < 2; round++) {
+      await call(host.socket.emitWithAck('game:move', { type: 'roll' }));
+      await call(friend.socket.emitWithAck('game:move', { type: 'roll' }));
+    }
+
+    await expect.poll(() => bonusRolls(sharer.session.playerId)).toBe(REFERRAL_BONUS_ROLLS);
+    expect(await bonusRolls(friend.session.playerId)).toBe(REFERRAL_BONUS_ROLLS);
+    // Хост никого не приглашал.
+    expect(await bonusRolls(host.session.playerId)).toBe(0);
+  });
+
+  it('код руками засчитывается хосту, вход из списка комнат — не приглашение', async () => {
+    const host = await client();
+    const typed = await client();
+    const fromList = await client();
+    const broken = await client();
+    const created = await call<RoomView>(host.socket.emitWithAck('room:create', { name: 'Алиса' }));
+
+    await call(typed.socket.emitWithAck('room:join', { code: created.code, name: 'Боб', invite: 'code' }));
+    expect(await referrerOf(typed.session.playerId)).toBe(host.session.playerId);
+
+    await call(fromList.socket.emitWithAck('room:join', { code: created.code, name: 'Вера' }));
+    expect(await referrerOf(fromList.session.playerId)).toBeNull();
+
+    const bad = await broken.socket.emitWithAck('room:join', { code: created.code, name: 'Гена', invite: 'ref_x' });
+    expect(bad).toMatchObject({ ok: false, error: { code: 'BAD_REQUEST' } });
   });
 
   it('главная видит список комнат и его обновления', async () => {

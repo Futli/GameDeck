@@ -11,6 +11,7 @@ import { ShopService } from './shop/shop-service.js';
 import { SkinService } from './skins/skin-service.js';
 import { registerSocketHandlers, type GameServer } from './socket/handlers.js';
 import { StatsService } from './stats/stats-service.js';
+import { WidgetService, type WidgetMessage } from './widget/widget-service.js';
 
 /** Криптостойкий ГСЧ: бросок нельзя предсказать по предыдущим. */
 export const cryptoRng: Rng = () => randomInt(0, 2 ** 32) / 2 ** 32;
@@ -27,6 +28,10 @@ export interface AppOptions {
   telegram?: { botToken: string; maxAgeSec: number };
   /** https://t.me/<бот>/<приложение> — для ссылок-приглашений. */
   telegramAppUrl?: string | null;
+  /** Как часто в виджете копится бросок. По умолчанию WIDGET_ROLL_INTERVAL_SEC. */
+  widgetRollIntervalSec?: number;
+  /** Пригласивший получил награду за первую партию друга: бот обновит его виджет. */
+  onReferrerRewarded?: (referrer: WidgetMessage) => void;
 }
 
 /**
@@ -41,6 +46,9 @@ export async function buildApp(options: AppOptions) {
   const stats = new StatsService(options.db);
   const shop = new ShopService(options.db);
   const skins = new SkinService(options.db);
+  const rng = options.rng ?? cryptoRng;
+  // Виджет и рефералка живут в одной таблице, поэтому сервис нужен и столу, даже когда бот выключен.
+  const widget = new WidgetService(options.db, players, rng, options.widgetRollIntervalSec);
   await shop.syncCatalog();
 
   // Socket.IO вешается на тот же http-сервер, что и Fastify: один порт для всего.
@@ -56,9 +64,11 @@ export async function buildApp(options: AppOptions) {
     players,
     skins,
     stats,
-    rng: options.rng ?? cryptoRng,
+    rng,
     disconnectGraceMs: options.disconnectGraceMs ?? 60_000,
     telegram: options.telegram,
+    referrals: widget,
+    onReferrerRewarded: options.onReferrerRewarded,
     log: app.log,
   });
   registerHttpRoutes(app, { rooms, players, stats, shop, skins, telegramAppUrl: options.telegramAppUrl ?? null });
@@ -71,5 +81,5 @@ export async function buildApp(options: AppOptions) {
     io.engine.close();
   });
 
-  return { app, io, rooms, players, stats, shop, skins };
+  return { app, io, rooms, players, stats, shop, skins, widget };
 }

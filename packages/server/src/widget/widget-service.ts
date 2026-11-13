@@ -1,5 +1,6 @@
 import {
   accrueWidgetRolls,
+  referralCodeSchema,
   rerollWidgetDie,
   rollWidgetDice,
   spendWidgetRoll,
@@ -12,7 +13,7 @@ import {
 } from '@gamedeck/shared';
 import { and, eq, gte, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { items, playerItems, players, widgetPlayers } from '../db/schema.js';
+import { items, matchPlayers, playerItems, players, widgetPlayers } from '../db/schema.js';
 import { changeCoins, type Tx } from '../db/wallet.js';
 import type { PlayerService } from '../players/player-service.js';
 import type { WidgetRollAnswer, WidgetState } from './build.js';
@@ -41,13 +42,18 @@ type WidgetRow = typeof widgetPlayers.$inferSelect;
 const canReroll = (row: Pick<WidgetRow, 'modifiers' | 'lastDice' | 'lastRollModified'>) =>
   row.modifiers > 0 && row.lastDice !== null && !row.lastRollModified;
 
-/** Код в реферальной ссылке: id игрока без дефисов (в параметре start допустимы только буквы, цифры, _ и -). */
-export const referralCode = (playerId: string) => `ref_${playerId.replaceAll('-', '')}`;
-
-function playerIdFromReferralCode(code: string): string | null {
-  const match = /^ref_([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})$/.exec(code);
+/**
+ * Длинный код первых ссылок на бота: ref_ и id игрока без дефисов. Такие ссылки уже разосланы,
+ * поэтому бот их по-прежнему понимает, а новые выдаёт с коротким кодом.
+ */
+function playerIdFromLegacyCode(param: string): string | null {
+  const match = /^ref_([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})$/.exec(param);
   return match ? match.slice(1).join('-') : null;
 }
+
+/** Игрок уже играл за столом: есть хоть одна записанная партия. */
+const playedMatch = (playerId: typeof widgetPlayers.playerId | string) =>
+  sql`exists (select 1 from ${matchPlayers} where ${matchPlayers.playerId} = ${playerId})`;
 
 /** Чей виджет надо обновить: игрок и его последнее сообщение с виджетом. */
 export interface WidgetMessage {
@@ -192,16 +198,32 @@ export class WidgetService {
   }
 
   /**
-   * Запомнить, кто пригласил игрока. Работает один раз и только до первого броска:
-   * тот, кто уже играет в виджете, чужим рефералом не становится. Себя пригласить нельзя.
+   * Запомнить, кто пригласил игрока, по параметру ссылки на бота (`/start ref_<код>`).
    * Непонятный код и несуществующий пригласивший молча пропускаются: человек, пришедший
    * по битой ссылке, всё равно должен получить виджет.
    */
-  async setReferrer(playerId: string, code: string): Promise<boolean> {
-    const referrerId = playerIdFromReferralCode(code);
-    if (!referrerId || referrerId === playerId) return false;
+  async setReferrer(playerId: string, startParam: string): Promise<boolean> {
+    const code = referralCodeSchema.safeParse(startParam.replace(/^ref_/, ''));
+    const referrerId = code.success
+      ? await this.players.playerIdByReferralCode(code.data)
+      : playerIdFromLegacyCode(startParam);
+    return referrerId ? this.setReferrerId(playerId, referrerId) : false;
+  }
+
+  /**
+   * Запомнить, кто пригласил игрока: по реферальной ссылке на бота или по приглашению в комнату.
+   * Работает один раз и только для новичка: кто уже бросал в виджете или сыграл партию,
+   * чужим рефералом не становится. Себя пригласить нельзя.
+   */
+  async setReferrerId(playerId: string, referrerId: string): Promise<boolean> {
+    if (referrerId === playerId) return false;
     const [referrer] = await this.db.select({ id: players.id }).from(players).where(eq(players.id, referrerId));
     if (!referrer) return false;
+    const [played] = await this.db
+      .select({ yes: playedMatch(playerId) })
+      .from(players)
+      .where(eq(players.id, playerId));
+    if (!played || played.yes) return false;
 
     await this.db.insert(widgetPlayers).values({ playerId, rolls: WIDGET_MAX_STORED_ROLLS }).onConflictDoNothing();
     const updated = await this.db
@@ -215,9 +237,10 @@ export class WidgetService {
   }
 
   /**
-   * Выдать награду за приглашение. Вызывается после броска: если это был первый бросок
-   * приглашённого, он и пригласивший получают по REFERRAL_BONUS_ROLLS бонусных бросков.
-   * Награда за бросок, а не за переход по ссылке: так она идёт за живого игрока.
+   * Выдать награду за приглашение. Вызывается после броска в виджете и после партии за столом:
+   * если приглашённый уже сыграл (бросил в виджете или закончил партию), он и пригласивший
+   * получают по REFERRAL_BONUS_ROLLS бонусных бросков. Награда за игру, а не за переход
+   * по ссылке: так она идёт за живого игрока.
    * Возвращает виджет пригласившего, чтобы бот его обновил; null — награждать некого.
    */
   async claimReferral(playerId: string, now: number): Promise<WidgetMessage | null> {
@@ -234,7 +257,7 @@ export class WidgetService {
             eq(widgetPlayers.playerId, playerId),
             sql`${widgetPlayers.referredBy} is not null`,
             isNull(widgetPlayers.referralRewardedAt),
-            sql`${widgetPlayers.lastDice} is not null`,
+            sql`(${widgetPlayers.lastDice} is not null or ${playedMatch(widgetPlayers.playerId)})`,
           ),
         )
         .returning({ referredBy: widgetPlayers.referredBy });

@@ -18,6 +18,7 @@ const ignore = () => {};
 export function RoomScreen({ room }: { room: RoomView }) {
   const myId = useClientState((s) => s.playerId) ?? '';
   const telegramAppUrl = useClientState((s) => s.telegramAppUrl);
+  const myReferralCode = useClientState((s) => s.profile?.referralCode ?? null);
   const lastMatch = useClientState((s) => s.lastMatch);
   const [copied, setCopied] = useState(false);
   const t = useT();
@@ -31,7 +32,7 @@ export function RoomScreen({ room }: { room: RoomView }) {
   const rolling = room.status === 'playing' && (room.game?.awaiting.length ?? 0) > 0;
   const currentName = room.players.find((p) => p.id === room.game?.currentPlayerId)?.name;
 
-  const inviteLink = makeInviteLink(room.code, telegramAppUrl);
+  const inviteLink = makeInviteLink(room.code, telegramAppUrl, myReferralCode);
   const copyInvite = async () => {
     // В Telegram — системное «Поделиться»: выбрать чат и отправить ссылку.
     if (tg && telegramAppUrl) return shareInvite(inviteLink, t.room.shareText(room.code));

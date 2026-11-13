@@ -1,3 +1,5 @@
+import { referralCodeSchema, type JoinRoomInput } from '@gamedeck/shared';
+
 /**
  * Всё, что связано с запуском внутри Telegram. Объект window.Telegram.WebApp создаёт
  * скрипт telegram-web-app.js (подключён в index.html). Вне Telegram он тоже есть,
@@ -65,8 +67,29 @@ export const telegramName = telegramUser
     ).slice(0, 24)
   : null;
 
-/** Код комнаты из ссылки t.me/<бот>/<приложение>?startapp=K7M2Q. */
-export const startRoomCode = tg?.initDataUnsafe.start_param?.toUpperCase() ?? null;
+/**
+ * Приглашение в комнату приходит как startapp=K7M2Q_ab12cd34 (Telegram) или /?room=K7M2Q&ref=ab12cd34
+ * (браузер): код комнаты и реферальный код того, кто поделился ссылкой. В старых ссылках кода нет.
+ */
+const [startCode, ...startRef] = (tg?.initDataUnsafe.start_param ?? '').split('_');
+const urlParams = new URLSearchParams(location.search);
+
+/** Код комнаты из ссылки t.me/<бот>/<приложение>?startapp=…: по нему Mini App сразу садит за стол. */
+export const startRoomCode = startCode ? startCode.toUpperCase() : null;
+
+/** Код комнаты из ссылки-приглашения: им заполнено поле «Код комнаты». */
+export const linkRoomCode = startRoomCode ?? urlParams.get('room')?.toUpperCase() ?? '';
+const linkRef = startRoomCode ? startRef.join('_') : urlParams.get('ref');
+
+/**
+ * Как игрок узнал код (поле invite в room:join). Код из ссылки с целым реферальным кодом —
+ * пригласил тот, кто поделился. Код набран руками, взят из старой ссылки или ссылка битая —
+ * «code», тогда сервер засчитает приглашение хосту.
+ */
+export function inviteFor(code: string): JoinRoomInput['invite'] {
+  const ref = referralCodeSchema.safeParse(linkRef);
+  return code === linkRoomCode && ref.success ? ref.data : 'code';
+}
 
 /**
  * Цвета Telegram → наши CSS-переменные (styles.css). Свою тёмную палитру оставляем
@@ -105,9 +128,13 @@ export function initTelegram(): void {
   tg.ready();
 }
 
-/** Ссылка-приглашение: в Telegram — на Mini App, иначе — на сайт. */
-export function inviteLink(code: string, telegramAppUrl: string | null): string {
-  return telegramAppUrl ? `${telegramAppUrl}?startapp=${code}` : `${location.origin}/?room=${code}`;
+/**
+ * Ссылка-приглашение: в Telegram — на Mini App, иначе — на сайт. В ней реферальный код того,
+ * кто делится: новичок, пришедший по ссылке, засчитается ему как приглашённый друг.
+ */
+export function inviteLink(code: string, telegramAppUrl: string | null, ref: string | null): string {
+  if (telegramAppUrl) return `${telegramAppUrl}?startapp=${ref ? `${code}_${ref}` : code}`;
+  return `${location.origin}/?room=${code}${ref ? `&ref=${ref}` : ''}`;
 }
 
 /** Открыть системное «Поделиться» Telegram со ссылкой на комнату и текстом приглашения. */

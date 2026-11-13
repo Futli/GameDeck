@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { gameIds, type GameMove } from './games/index.js';
+import { referralCodeSchema } from './referral.js';
 
 /**
  * zod-схемы всего, что приходит от клиента. Сервер не доверяет ни одному
@@ -54,6 +55,13 @@ export const joinRoomSchema = z.object({
   name: playerNameSchema,
   password: z.string().max(32).optional(),
   color: playerColorSchema.optional(),
+  /**
+   * Как игрок узнал о комнате. Реферальный код — пришёл по ссылке-приглашению, пригласил
+   * владелец кода. «code» — ввёл код руками, пригласившим считается хост. Без поля — нашёл
+   * комнату в списке на главной, это не приглашение. Новичку пригласивший засчитывается
+   * так же, как по реферальной ссылке на бота.
+   */
+  invite: z.union([z.literal('code'), referralCodeSchema]).optional(),
 });
 
 export const updateSettingsSchema = roomSettingsSchema.partial();

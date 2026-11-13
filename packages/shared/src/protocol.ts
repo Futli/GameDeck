@@ -202,6 +202,8 @@ export interface MyProfile {
   avatarUrl: string | null;
   /** Текущий баланс монет. */
   coins: number;
+  /** Реферальный код для ссылок-приглашений (8 символов, см. referral.ts). */
+  referralCode: string;
   gamesPlayed: number;
   wins: number;
   /** Всего выиграно монет на ставках. */
