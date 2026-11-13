@@ -390,6 +390,14 @@ select {
 .history-row--won {
   border-left-color: var(--good);
 }
+.history-row--rating {
+  align-items: center;
+  border-left-color: var(--accent);
+}
+.rating-value {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
 .history-row__main,
 .history-row__numbers {
   display: flex;
@@ -432,6 +440,9 @@ select {
 .profile-stats .stat > span {
   color: var(--muted);
   font-size: 0.8rem;
+}
+.profile-stats .stat--span {
+  grid-column: 1 / -1;
 }
 .profile-stats .stat--wide {
   grid-column: 1 / -1;
