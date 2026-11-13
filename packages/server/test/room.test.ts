@@ -1,11 +1,24 @@
 import { DEFAULT_DICE_STYLE } from '@gamedeck/shared';
 import { describe, expect, it } from 'vitest';
-import type { PerudoView } from '@gamedeck/shared';
+import { ROOM_TIMEOUTS, type PerudoView, type Rng } from '@gamedeck/shared';
 import { RoomManager } from '../src/rooms/room-manager.js';
+import type { Room } from '../src/rooms/room.js';
 
 const alice = { id: 'alice', name: 'Алиса' };
 const bob = { id: 'bob', name: 'Боб' };
 const carol = { id: 'carol', name: 'Кэрол' };
+
+/** Хост начинает, остальные подтверждают — партия стартует. */
+const startAll = (room: Room, rng: Rng = Math.random) => {
+  room.startGame(room.hostId, rng);
+  for (const id of room.players.keys()) if (room.status !== 'playing') room.setReady(id, rng);
+};
+
+/** Часы, которые двигаем руками: таймеры комнаты срабатывают без настоящего ожидания. */
+const fakeClock = () => {
+  let now = 1_000_000;
+  return { now: () => now, advance: (ms: number) => (now += ms) };
+};
 
 describe('RoomManager', () => {
   it('создаёт комнату с кодом из 5 символов, создатель — хост', () => {
@@ -97,7 +110,7 @@ describe('RoomManager', () => {
     rooms.join(bob, room.code);
     expect(() => rooms.join(carol, 'XXXXX')).toThrow('не найдена');
 
-    room.startGame('alice', Math.random);
+    startAll(room);
     expect(room.status).toBe('playing');
     expect(() => rooms.join(carol, room.code)).toThrow('Игра уже идёт');
 
@@ -107,9 +120,14 @@ describe('RoomManager', () => {
     room.move('bob', { type: 'roll' }, six);
     expect(room.status).toBe('finished');
     expect(room.toView().game?.winnerId).toBe('bob');
+    // После партии — сразу комната ожидания: играем ещё?
+    expect(room.toView().readyCheck).toMatchObject({ reason: 'rematch', ready: [], hostDecides: false });
 
-    room.startGame('alice', Math.random);
+    room.setReady('bob', Math.random);
+    expect(room.status).toBe('finished');
+    room.setReady('alice', Math.random);
     expect(room.status).toBe('playing');
+    expect(room.toView().readyCheck).toBeNull();
   });
 
   it('у каждого свой цвет: желаемый, если свободен, иначе первый свободный', () => {
@@ -134,7 +152,9 @@ describe('RoomManager', () => {
     const rooms = new RoomManager();
     const room = rooms.create(alice, { gameId: 'perudo' });
     rooms.join(bob, room.code);
-    room.startGame('alice', Math.random);
+    startAll(room);
+    room.move('alice', { type: 'roll' }, Math.random);
+    room.move('bob', { type: 'roll' }, Math.random);
 
     const forAlice = room.toView('alice').game?.state as PerudoView;
     const forBob = room.toView('bob').game?.state as PerudoView;
@@ -153,7 +173,7 @@ describe('RoomManager', () => {
     const room = rooms.create(alice, { stake: 50 });
     rooms.join(bob, room.code);
     rooms.join(carol, room.code);
-    room.startGame('alice', Math.random);
+    startAll(room);
 
     room.move('alice', { type: 'roll' }, () => 0); // 1
     rooms.leave('carol'); // ушла посреди партии
@@ -167,5 +187,98 @@ describe('RoomManager', () => {
       { playerId: 'carol', seat: 2, place: 3 },
     ]);
     expect(room.takeResult()).toBeNull();
+  });
+
+  it('старт: модалка у всех, партия начинается, когда подтвердили все', () => {
+    const rooms = new RoomManager(Math.random, fakeClock().now);
+    const room = rooms.create(alice);
+    rooms.join(bob, room.code);
+    rooms.join(carol, room.code);
+
+    room.startGame('alice', Math.random);
+    expect(room.status).toBe('lobby');
+    expect(room.toView().readyCheck).toMatchObject({ reason: 'start', ready: ['alice'], hostDecides: false });
+    expect(room.toView().readyCheck?.msLeft).toBe(ROOM_TIMEOUTS.start);
+
+    room.setReady('bob', Math.random);
+    expect(room.status).toBe('lobby');
+    room.setReady('carol', Math.random);
+    expect(room.status).toBe('playing');
+    expect(() => room.setReady('carol', Math.random)).toThrow('нечего подтверждать');
+  });
+
+  it('кто-то вышел из комнаты ожидания — хост решает: ждать нового или начать без него', () => {
+    const rooms = new RoomManager();
+    const room = rooms.create(alice, { stake: 10 });
+    rooms.join(bob, room.code);
+    rooms.join(carol, room.code);
+    room.startGame('alice', Math.random);
+    room.setReady('bob', Math.random);
+    rooms.leave('carol');
+
+    // Все оставшиеся готовы, но сами не стартуем: может, придёт кто-то ещё.
+    expect(room.status).toBe('lobby');
+    expect(room.toView().readyCheck?.hostDecides).toBe(true);
+
+    // Хост поменял ставку — подтверждать заново.
+    room.updateSettings('alice', { stake: 20 });
+    expect(room.toView().readyCheck?.ready).toEqual(['alice']);
+    expect(() => room.startGame('alice', Math.random)).toThrow('не все');
+    room.setReady('bob', Math.random);
+    room.startGame('alice', Math.random);
+    expect(room.status).toBe('playing');
+  });
+
+  it('не подтвердил вовремя — исключён, играем без него', () => {
+    const clock = fakeClock();
+    const rooms = new RoomManager(Math.random, clock.now);
+    const room = rooms.create(alice);
+    rooms.join(bob, room.code);
+    rooms.join(carol, room.code);
+    room.startGame('alice', Math.random);
+    room.setReady('bob', Math.random);
+    expect(room.nextDeadline()).toBe(clock.now() + ROOM_TIMEOUTS.start);
+
+    clock.advance(ROOM_TIMEOUTS.start - 1);
+    expect(rooms.expire(room, Math.random)).toEqual([]);
+    clock.advance(1);
+    expect(rooms.expire(room, Math.random)).toEqual(['carol']);
+    expect(rooms.roomOf('carol')).toBeUndefined();
+    expect(room.status).toBe('playing');
+  });
+
+  it('таймер хода: за молчащего ходит правило игры, не бросивший кубики исключается', () => {
+    const clock = fakeClock();
+    const rooms = new RoomManager(Math.random, clock.now);
+    const room = rooms.create(alice, { gameId: 'perudo', stake: 30 });
+    rooms.join(bob, room.code);
+    rooms.join(carol, room.code);
+    startAll(room);
+
+    // Начало раунда: все бросают вместе, на это ROOM_TIMEOUTS.roll.
+    expect(room.toView().game).toMatchObject({ awaiting: ['alice', 'bob', 'carol'], currentPlayerId: null, pot: 90 });
+    room.move('alice', { type: 'roll' }, Math.random);
+    clock.advance(ROOM_TIMEOUTS.roll / 2);
+    room.move('bob', { type: 'roll' }, Math.random);
+    // Бросок одного таймер остальным не продлевает.
+    clock.advance(ROOM_TIMEOUTS.roll / 2);
+    expect(rooms.expire(room, Math.random)).toEqual(['carol']);
+    expect(room.toView().game).toMatchObject({ awaiting: [], currentPlayerId: 'alice' });
+    expect(room.toView().game?.msLeft).toBe(ROOM_TIMEOUTS.turn);
+
+    // Алиса молчит: за неё — самая маленькая ставка, ход у Боба.
+    clock.advance(ROOM_TIMEOUTS.turn);
+    expect(rooms.expire(room, Math.random)).toEqual([]);
+    const view = room.toView().game!;
+    expect((view.state as PerudoView).bids.at(-1)).toMatchObject({ playerId: 'alice', quantity: 1, face: 2 });
+    expect(view.currentPlayerId).toBe('bob');
+
+    // Исключённая по таймеру Кэрол в итоге — среди ушедших: её ставка осталась в банке партии.
+    rooms.leave('bob');
+    expect(room.takeResult()?.players).toEqual([
+      { playerId: 'alice', seat: 0, place: 1 },
+      { playerId: 'carol', seat: 2, place: 2 },
+      { playerId: 'bob', seat: 1, place: 2 },
+    ]);
   });
 });

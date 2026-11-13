@@ -14,7 +14,7 @@ export function shownReveal(view: PerudoView): PerudoReveal | null {
   return view.bids.length === 0 || view.winnerId ? view.lastReveal : null;
 }
 
-/** Кубик подходит к ставке: тот же номинал или единица-джокер (кроме палифико). */
-export function matchesBid(value: number, face: number, palifico: boolean): boolean {
-  return value === face || (value === 1 && face !== 1 && !palifico);
+/** Кубик подходит к ставке: тот же номинал или единица-джокер (кроме мапуто). */
+export function matchesBid(value: number, face: number, maputo: boolean): boolean {
+  return value === face || (value === 1 && face !== 1 && !maputo);
 }

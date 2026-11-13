@@ -101,7 +101,9 @@ socket.on('room:state', (room) => {
   setState({ room, lastMatch });
 });
 
-socket.on('room:kicked', () => setState({ room: null, notice: t().app.kicked }));
+socket.on('room:kicked', ({ reason }) =>
+  setState({ room: null, notice: reason === 'timeout' ? t().app.kickedTimeout : t().app.kicked }),
+);
 socket.on('match:recorded', (lastMatch) => {
   setState({ lastMatch });
   // Партия записана — обновляем счётчики игр, побед и монет.
@@ -137,6 +139,7 @@ export const api = {
   watchRooms: () => call<RoomSummary[]>('rooms:watch'),
   unwatchRooms: () => call<null>('rooms:unwatch'),
   startGame: () => call<RoomView>('game:start'),
+  ready: () => call<RoomView>('room:ready'),
   roll: () => call<RoomView>('game:move', { type: 'roll' }),
   move: (move: MoveInput) => call<RoomView>('game:move', move),
 };

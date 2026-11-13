@@ -3,6 +3,7 @@ import {
   GameRuleError,
   MAX_PLAYERS,
   PLAYER_COLORS,
+  ROOM_TIMEOUTS,
   games,
   type DiceStyle,
   type EquippedSkins,
@@ -48,6 +49,18 @@ interface ActiveGame {
   seats: Map<string, number>;
   /** Кто ушёл посреди партии: они получают последнее место. */
   leavers: string[];
+  /** Таймер хода: когда истекает и кого ждём (чтобы не перезапускать его без смены хода). */
+  timer: { deadline: number; waitingFor: string } | null;
+}
+
+/** Сбор подтверждений перед партией. */
+interface ReadyCheck {
+  reason: 'start' | 'rematch';
+  ready: Set<string>;
+  /** Когда исключаем не ответивших; null — таймер не идёт (ждём новых игроков). */
+  deadline: number | null;
+  /** Сколько игроков было, когда сбор начался. Меньше — значит, кто-то ушёл, и решает хост. */
+  expected: number;
 }
 
 /** Итог партии для записи в базу. Комната отдаёт его один раз. */
@@ -79,12 +92,15 @@ export class Room {
   settings: RoomSettings;
   status: RoomStatus = 'lobby';
   private game: ActiveGame | null = null;
+  private check: ReadyCheck | null = null;
   private pendingResult: MatchResult | null = null;
 
   constructor(
     readonly code: string,
     host: PlayerInfo,
     settings: Partial<RoomSettings> = {},
+    /** Часы для таймеров. В тестах подставляем свои, чтобы не ждать по-настоящему. */
+    private readonly clock: () => number = Date.now,
   ) {
     this.settings = { ...defaultSettings, ...settings, password: settings.password || null };
     this.hostId = host.id;
@@ -123,6 +139,10 @@ export class Room {
       avatarUrl: avatarUrl ?? null,
       connected: true,
     });
+    // Новичок в комнате ожидания тоже должен подтвердить участие — и получает на это время.
+    if (this.check) {
+      this.check.deadline = Math.max(this.check.deadline ?? 0, this.clock() + ROOM_TIMEOUTS.start);
+    }
   }
 
   /** Сменить свой цвет на свободный. Можно и во время игры — это только внешний вид. */
@@ -137,11 +157,13 @@ export class Room {
   /** Убрать игрока (вышел сам, кикнули или не вернулся после обрыва связи). */
   removePlayer(id: string): void {
     if (!this.players.delete(id)) return;
+    this.check?.ready.delete(id);
 
     if (this.game && this.status === 'playing') {
       this.game.leavers.push(id);
       this.game.state = this.game.module.removePlayer(this.game.state, id);
       this.syncStatus();
+      this.armTimer(false);
     }
     if (this.hostId === id) {
       // Хостом становится следующий по месту за столом.
@@ -164,6 +186,8 @@ export class Room {
       throw new AppError('TOO_MANY_PLAYERS', 'В комнате уже больше игроков, чем новый лимит');
     }
     this.settings = next;
+    // Игроки соглашались на старые условия (например, ставку) — пусть подтвердят заново.
+    if (this.check) this.check.ready = new Set([this.hostId]);
   }
 
   kick(byId: string, targetId: string): void {
@@ -173,26 +197,77 @@ export class Room {
     this.removePlayer(targetId);
   }
 
+  /**
+   * Хост начинает игру. Партия стартует не сразу: сначала все подтверждают
+   * участие (модалка «Партия начинается»). Если сбор уже идёт, а кто-то ушёл,
+   * хост может начать без него, когда все оставшиеся готовы.
+   */
   startGame(byId: string, rng: Rng): void {
     this.assertHost(byId);
     if (this.status === 'playing') throw new AppError('GAME_IN_PROGRESS', 'Игра уже идёт');
-    const module = games[this.settings.gameId];
-    if (!module) throw new AppError('UNKNOWN_GAME', 'Неизвестная игра');
+    const module = this.module();
     if (this.players.size < module.minPlayers) {
       throw new AppError('NOT_ENOUGH_PLAYERS', `Нужно минимум ${module.minPlayers} игрока`);
     }
-    // Порядок ходов — по местам за столом, по часовой стрелке.
-    const order = [...this.players.values()].sort((a, b) => a.seat - b.seat).map((p) => p.id);
-    const players = [...this.players.values()];
-    this.game = {
-      module,
-      state: module.start(order, rng),
-      startedAt: new Date(),
-      seats: new Map(players.map((p) => [p.id, p.seat])),
-      leavers: [],
-    };
-    this.pendingResult = null;
-    this.status = 'playing';
+    if (!this.check) {
+      this.openCheck('start', ROOM_TIMEOUTS.start);
+      this.check!.ready.add(byId);
+      this.startIfEveryoneReady(rng);
+      return;
+    }
+    this.check.ready.add(byId);
+    if (!this.everyoneReady()) throw new AppError('NOT_READY', 'Ещё не все подтвердили участие');
+    this.begin(rng);
+  }
+
+  /** Игрок подтвердил участие в следующей партии. */
+  setReady(id: string, rng: Rng): void {
+    if (!this.players.has(id)) throw new AppError('NOT_IN_ROOM', 'Вы не в комнате');
+    if (!this.check) throw new AppError('NO_READY_CHECK', 'Сейчас нечего подтверждать');
+    this.check.ready.add(id);
+    this.startIfEveryoneReady(rng);
+  }
+
+  /** Ближайший момент, когда комнате нужно проверить таймеры (expire), или null. */
+  nextDeadline(): number | null {
+    const times = [this.check?.deadline, this.status === 'playing' ? this.game?.timer?.deadline : null];
+    const set = times.filter((t): t is number => typeof t === 'number');
+    return set.length > 0 ? Math.min(...set) : null;
+  }
+
+  /**
+   * Время вышло. Не ответившие в комнате ожидания и не бросившие кубики
+   * исключаются; тому, кто молчит на своём ходу, ход делает правило игры
+   * (timeoutMove). Возвращает тех, кого убрали из комнаты.
+   */
+  expire(now: number, rng: Rng): string[] {
+    const removed: string[] = [];
+    const remove = (ids: string[]) =>
+      ids.forEach((id) => {
+        this.removePlayer(id);
+        removed.push(id);
+      });
+
+    const check = this.check;
+    if (check?.deadline != null && now >= check.deadline) {
+      remove([...this.players.keys()].filter((id) => !check.ready.has(id)));
+      check.deadline = null;
+      // Не успевших исключили — играем без них, если хватает игроков.
+      if (this.players.size >= this.module().minPlayers && this.everyoneReady()) this.begin(rng);
+    }
+
+    const game = this.game;
+    if (this.status === 'playing' && game?.timer && now >= game.timer.deadline) {
+      const awaiting = game.module.awaiting?.(game.state) ?? [];
+      const current = game.module.currentPlayer(game.state);
+      if (awaiting.length > 0) remove(awaiting.filter((id) => this.players.has(id)));
+      else if (current) {
+        const move = game.module.timeoutMove?.(game.state, current) ?? null;
+        if (move) this.move(current, move, rng);
+        else remove([current]);
+      }
+    }
+    return removed;
   }
 
   move(byId: string, move: unknown, rng: Rng): void {
@@ -206,6 +281,7 @@ export class Room {
       throw err;
     }
     this.syncStatus();
+    this.armTimer(true);
   }
 
   /**
@@ -216,6 +292,9 @@ export class Room {
   toView(viewerId: string | null = null): RoomView {
     const { password, ...settings } = this.settings;
     const game = this.game;
+    const now = this.clock();
+    const left = (deadline: number | null | undefined) => (deadline == null ? null : Math.max(0, deadline - now));
+    const check = this.check;
     return {
       code: this.code,
       status: this.status,
@@ -227,7 +306,16 @@ export class Room {
         gameId: game.module.id,
         state: game.module.viewFor ? game.module.viewFor(game.state, viewerId) : game.state,
         currentPlayerId: game.module.currentPlayer(game.state),
+        awaiting: game.module.awaiting?.(game.state) ?? [],
+        msLeft: this.status === 'playing' ? left(game.timer?.deadline) : null,
+        pot: this.settings.stake * game.seats.size,
         winnerId: game.module.winner(game.state),
+      },
+      readyCheck: check && {
+        reason: check.reason,
+        ready: [...check.ready].filter((id) => this.players.has(id)),
+        msLeft: left(check.deadline),
+        hostDecides: this.players.size < check.expected,
       },
     };
   }
@@ -277,6 +365,8 @@ export class Room {
       for (const playerId of group) players.push({ playerId, seat: game.seats.get(playerId)!, place });
       place += group.length; // «спортивная» нумерация: 1, 2, 2, 4
     }
+    // Сразу открываем комнату ожидания: играем ещё или выходим.
+    this.openCheck('rematch', ROOM_TIMEOUTS.rematch);
     this.pendingResult = {
       gameId: game.module.id,
       roomCode: this.code,
@@ -285,6 +375,69 @@ export class Room {
       startedAt: game.startedAt,
       finishedAt: new Date(),
       players,
+    };
+  }
+
+  private module(): GameModule<unknown, unknown> {
+    const module = games[this.settings.gameId];
+    if (!module) throw new AppError('UNKNOWN_GAME', 'Неизвестная игра');
+    return module;
+  }
+
+  private openCheck(reason: ReadyCheck['reason'], timeout: number): void {
+    this.check = { reason, ready: new Set(), deadline: this.clock() + timeout, expected: this.players.size };
+  }
+
+  private everyoneReady(): boolean {
+    return [...this.players.keys()].every((id) => this.check?.ready.has(id));
+  }
+
+  /** Все на месте и все готовы — начинаем сами. Если кто-то ушёл, ждём решения хоста. */
+  private startIfEveryoneReady(rng: Rng): void {
+    const check = this.check;
+    if (!check || this.players.size < check.expected) return;
+    if (this.players.size >= this.module().minPlayers && this.everyoneReady()) this.begin(rng);
+  }
+
+  /** Раздать места и начать партию. Права и число игроков уже проверены. */
+  private begin(rng: Rng): void {
+    const module = this.module();
+    // Порядок ходов — по местам за столом, по часовой стрелке.
+    const players = [...this.players.values()].sort((a, b) => a.seat - b.seat);
+    this.game = {
+      module,
+      state: module.start(
+        players.map((p) => p.id),
+        rng,
+      ),
+      startedAt: new Date(),
+      seats: new Map(players.map((p) => [p.id, p.seat])),
+      leavers: [],
+      timer: null,
+    };
+    this.check = null;
+    this.pendingResult = null;
+    this.status = 'playing';
+    this.armTimer(true);
+  }
+
+  /**
+   * Завести таймер хода. Ход перешёл (fresh) или сменился тот, кого ждём, — время
+   * заново. Пока все вместе бросают кубики, каждый бросок таймер не продлевает.
+   */
+  private armTimer(fresh: boolean): void {
+    const game = this.game;
+    if (!game) return;
+    if (this.status !== 'playing') {
+      game.timer = null;
+      return;
+    }
+    const together = (game.module.awaiting?.(game.state) ?? []).length > 0;
+    const waitingFor = together ? '*' : (game.module.currentPlayer(game.state) ?? '');
+    if (game.timer?.waitingFor === waitingFor && !(fresh && !together)) return;
+    game.timer = {
+      waitingFor,
+      deadline: this.clock() + (together ? ROOM_TIMEOUTS.roll : ROOM_TIMEOUTS.turn),
     };
   }
 

@@ -37,8 +37,47 @@ export interface GameView {
    */
   state: unknown;
   currentPlayerId: string | null;
+  /**
+   * Кто должен действовать все вместе, без очереди (бросок кубиков в начале
+   * раунда). Пока список не пуст, currentPlayerId — null.
+   */
+  awaiting: string[];
+  /** Сколько осталось на текущий ход (или на общий бросок), мс. null — таймер не идёт. */
+  msLeft: number | null;
+  /** Банк партии: ставка × число игроков на старте. Ушедший свою ставку не забирает. */
+  pot: number;
   winnerId: string | null;
 }
+
+/**
+ * Комната ожидания между партиями: все подтверждают, что играют.
+ * Кто не ответил до конца таймера — исключается, игра идёт без него.
+ */
+export interface ReadyCheckView {
+  /** start — хост позвал всех начинать; rematch — партия кончилась, играем ли ещё. */
+  reason: 'start' | 'rematch';
+  /** Кто уже подтвердил. */
+  ready: string[];
+  /** Сколько осталось до исключения тех, кто не ответил, мс. null — ждём без таймера. */
+  msLeft: number | null;
+  /**
+   * Кто-то ушёл: сама партия не начнётся. Хост решает — подождать нового игрока
+   * или начать без него, когда все оставшиеся готовы.
+   */
+  hostDecides: boolean;
+}
+
+/** Сколько ждём игроков, мс. Общие для сервера и клиента: клиент рисует по ним полоски таймера. */
+export const ROOM_TIMEOUTS = {
+  /** Ход в партии: ставка, «не верю», бросок в «Броске кубика». */
+  turn: 45_000,
+  /** Общий бросок кубиков в начале раунда. */
+  roll: 20_000,
+  /** Подтвердить участие, когда хост начинает игру (и новичку, вошедшему в комнату ожидания). */
+  start: 30_000,
+  /** Решить после партии: играть ещё или выйти. */
+  rematch: 60_000,
+} as const;
 
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 
@@ -54,6 +93,8 @@ export interface RoomView {
   settings: Omit<RoomSettings, 'password'> & { hasPassword: boolean };
   players: PlayerView[];
   game: GameView | null;
+  /** Идёт сбор подтверждений перед партией (модалка у всех). null — не идёт. */
+  readyCheck: ReadyCheckView | null;
 }
 
 /**
@@ -91,14 +132,21 @@ export interface ClientToServerEvents {
   /** Подписаться на список комнат (главная). Ответ — текущий список, дальше приходит rooms:list. */
   'rooms:watch': (ack: Ack<RoomSummary[]>) => void;
   'rooms:unwatch': (ack: Ack<null>) => void;
+  /**
+   * Хост начинает игру: открывает сбор подтверждений. Если сбор уже идёт и все
+   * оставшиеся готовы — запускает партию сразу, не дожидаясь новых игроков.
+   */
   'game:start': (ack: Ack<RoomView>) => void;
+  /** «Играю»: подтвердить участие в следующей партии. Отказ — это room:leave. */
+  'room:ready': (ack: Ack<RoomView>) => void;
   'game:move': (input: MoveInput, ack: Ack<RoomView>) => void;
 }
 
 export interface ServerToClientEvents {
   session: (session: SessionInfo) => void;
   'room:state': (room: RoomView) => void;
-  'room:kicked': (info: { code: string }) => void;
+  /** Игрока убрали из комнаты: хост исключил или кончилось время на ответ. */
+  'room:kicked': (info: { code: string; reason: 'host' | 'timeout' }) => void;
   /** Список комнат изменился. Приходит только тем, кто подписан через rooms:watch. */
   'rooms:list': (rooms: RoomSummary[]) => void;
   /** Партия сохранена в базе: места и изменение рейтинга у каждого. */

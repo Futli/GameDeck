@@ -18,8 +18,13 @@ import { GameRuleError, type GameModule, type Rng } from './types.js';
  *   (не больше 5), иначе теряет кубик.
  * - Тот, у кого изменилось число кубиков, начинает следующий раунд.
  * - Без кубиков — выбыл. Последний со стаканом — победитель.
- * - Палифико: когда у игрока впервые остаётся 1 кубик, следующий раунд особый —
- *   единицы не джокеры, номинал после первой ставки менять нельзя, «точно» нельзя.
+ * - Мапуто (в классических правилах — «palifico»): когда у игрока впервые
+ *   остаётся 1 кубик, следующий раунд особый — единицы не джокеры, номинал
+ *   после первой ставки менять нельзя, «точно» нельзя.
+ *
+ * Раунд начинается с фазы броска: каждый сам нажимает «Бросить», все трясут
+ * стаканы одновременно, без очереди. Ставки начинаются, когда бросили все.
+ * Так у стола есть пауза между раундами: все успевают увидеть, кто потерял кубик.
  */
 
 export const PERUDO_START_DICE = 5;
@@ -36,8 +41,8 @@ export interface PerudoReveal {
   call: 'dudo' | 'calza';
   callerId: string;
   bid: PerudoBid;
-  /** Раунд был палифико: единицы не считались джокерами. */
-  palifico: boolean;
+  /** Раунд был мапуто: единицы не считались джокерами. */
+  maputo: boolean;
   dice: Record<string, number[]>;
   /** Сколько кубиков нужного номинала нашлось (с учётом джокеров). */
   actual: number;
@@ -52,11 +57,19 @@ export interface PerudoState {
   /** Кубики под стаканами. Пустой массив — игрок выбыл. СЕКРЕТ. */
   dice: Record<string, number[]>;
   round: number;
-  palifico: boolean;
-  /** Кто уже вызывал палифико: у каждого оно бывает один раз. */
-  palificoUsed: string[];
+  /**
+   * roll — начало раунда: все бросают кубики одновременно, ставок ещё нет.
+   * bid — ставки по кругу.
+   */
+  phase: 'roll' | 'bid';
+  /** Кто уже бросил кубики в этом раунде. До броска кубики игрока — нули. */
+  rolled: string[];
+  maputo: boolean;
+  /** Кто уже вызывал мапуто: у каждого оно бывает один раз. */
+  maputoUsed: string[];
   /** Кто остался без кубиков, в порядке выбывания. Нужно для мест в рейтинге. */
   eliminated: string[];
+  /** Чей ход в фазе ставок. В фазе броска — кто начнёт торговаться. */
   turnId: string | null;
   /** Ставки текущего раунда, последняя — действующая. */
   bids: PerudoBid[];
@@ -85,6 +98,7 @@ export const perudoMoveSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('dudo') }),
   z.object({ type: z.literal('calza') }),
+  z.object({ type: z.literal('roll') }),
 ]);
 export type PerudoMove = z.infer<typeof perudoMoveSchema>;
 
@@ -102,8 +116,8 @@ function nextActive(state: PerudoState, fromId: string, order = state.order): st
   return null;
 }
 
-export function countFace(dice: Record<string, number[]>, face: number, palifico: boolean): number {
-  const wild = face !== 1 && !palifico;
+export function countFace(dice: Record<string, number[]>, face: number, maputo: boolean): number {
+  const wild = face !== 1 && !maputo;
   let count = 0;
   for (const hand of Object.values(dice)) {
     for (const value of hand) if (value === face || (wild && value === 1)) count++;
@@ -112,16 +126,16 @@ export function countFace(dice: Record<string, number[]>, face: number, palifico
 }
 
 /** Проверка, что ставка next старше prev. Бросает GameRuleError с понятным текстом. */
-export function assertValidRaise(prev: PerudoBid | null, next: Omit<PerudoBid, 'playerId'>, palifico: boolean): void {
+export function assertValidRaise(prev: PerudoBid | null, next: Omit<PerudoBid, 'playerId'>, maputo: boolean): void {
   const fail = (message: string) => {
     throw new GameRuleError('BAD_BID', message);
   };
   if (!prev) {
-    if (next.face === 1 && !palifico) fail('Раунд нельзя начинать со ставки на единицы');
+    if (next.face === 1 && !maputo) fail('Раунд нельзя начинать со ставки на единицы');
     return;
   }
-  if (palifico) {
-    if (next.face !== prev.face) fail('В палифико номинал менять нельзя');
+  if (maputo) {
+    if (next.face !== prev.face) fail('В мапуто номинал менять нельзя');
     if (next.quantity <= prev.quantity) fail('Нужно больше кубиков');
     return;
   }
@@ -141,18 +155,33 @@ export function assertValidRaise(prev: PerudoBid | null, next: Omit<PerudoBid, '
   }
 }
 
-function rollHands(state: PerudoState, rng: Rng): Record<string, number[]> {
-  const dice: Record<string, number[]> = {};
-  for (const id of state.order) {
-    dice[id] = Array.from({ length: state.dice[id]?.length ?? 0 }, () => rollD6(rng));
-  }
-  return dice;
+/** Кто ещё не бросил кубики в фазе броска. */
+const notRolled = (state: PerudoState) => activePlayers(state).filter((id) => !state.rolled.includes(id));
+
+/** Бросок одного игрока. Когда бросили все — начинаются ставки. */
+function rollFor(state: PerudoState, playerId: string, rng: Rng): PerudoState {
+  if (state.phase !== 'roll') throw new GameRuleError('ALREADY_ROLLED', 'Кубики в этом раунде уже брошены');
+  if (!isActive(state, playerId)) throw new GameRuleError('OUT', 'У вас нет кубиков');
+  if (state.rolled.includes(playerId)) throw new GameRuleError('ALREADY_ROLLED', 'Вы уже бросили кубики');
+  const hand = state.dice[playerId]!.map(() => rollD6(rng));
+  return startBiddingIfReady({
+    ...state,
+    dice: { ...state.dice, [playerId]: hand },
+    rolled: [...state.rolled, playerId],
+  });
+}
+
+function startBiddingIfReady(state: PerudoState): PerudoState {
+  if (state.phase !== 'roll' || state.winnerId || notRolled(state).length > 0) return state;
+  // Начинающий мог уйти из-за стола, пока остальные бросали.
+  const turnId = state.turnId && isActive(state, state.turnId) ? state.turnId : activePlayers(state)[0]!;
+  return { ...state, phase: 'bid', turnId };
 }
 
 /** Открыть стаканы, поменять число кубиков и начать новый раунд (или закончить игру). */
-function resolveRound(state: PerudoState, callerId: string, call: 'dudo' | 'calza', rng: Rng): PerudoState {
+function resolveRound(state: PerudoState, callerId: string, call: 'dudo' | 'calza'): PerudoState {
   const bid = state.bids.at(-1)!;
-  const actual = countFace(state.dice, bid.face, state.palifico);
+  const actual = countFace(state.dice, bid.face, state.maputo);
 
   let loserId: string | null = null;
   let gainerId: string | null = null;
@@ -173,7 +202,7 @@ function resolveRound(state: PerudoState, callerId: string, call: 'dudo' | 'calz
     call,
     callerId,
     bid,
-    palifico: state.palifico,
+    maputo: state.maputo,
     dice: state.dice,
     actual,
     loserId,
@@ -188,18 +217,20 @@ function resolveRound(state: PerudoState, callerId: string, call: 'dudo' | 'calz
   };
 
   const alive = activePlayers(sized);
-  if (alive.length === 1) return { ...sized, turnId: null, palifico: false, winnerId: alive[0]! };
+  if (alive.length === 1) return { ...sized, turnId: null, maputo: false, winnerId: alive[0]! };
 
   const changed = loserId ?? gainerId ?? callerId;
   const starter = isActive(sized, changed) ? changed : nextActive(sized, changed)!;
 
-  const palifico = loserId !== null && counts[loserId] === 1 && !state.palificoUsed.includes(loserId);
+  const maputo = loserId !== null && counts[loserId] === 1 && !state.maputoUsed.includes(loserId);
+  // Новые кубики не бросаем сами: раунд начнётся с фазы броска, каждый нажмёт «Бросить».
   return {
     ...sized,
-    dice: rollHands(sized, rng),
     round: state.round + 1,
-    palifico,
-    palificoUsed: palifico ? [...state.palificoUsed, loserId!] : state.palificoUsed,
+    phase: 'roll',
+    rolled: [],
+    maputo,
+    maputoUsed: maputo ? [...state.maputoUsed, loserId!] : state.maputoUsed,
     turnId: starter,
   };
 }
@@ -211,31 +242,46 @@ export const perudo: GameModule<PerudoState, PerudoMove> = {
   maxPlayers: 6,
   moveSchema: perudoMoveSchema,
 
-  start(playerIds, rng) {
+  start(playerIds) {
     if (playerIds.length < this.minPlayers) {
       throw new GameRuleError('NOT_ENOUGH_PLAYERS', `Нужно минимум ${this.minPlayers} игрока`);
     }
-    const blank: PerudoState = {
+    // Первый раунд тоже начинается с броска: кубики бросают сами игроки.
+    return {
       order: [...playerIds],
       dice: Object.fromEntries(playerIds.map((id) => [id, new Array<number>(PERUDO_START_DICE).fill(0)])),
       round: 1,
-      palifico: false,
-      palificoUsed: [],
+      phase: 'roll',
+      rolled: [],
+      maputo: false,
+      maputoUsed: [],
       eliminated: [],
       turnId: playerIds[0]!,
       bids: [],
       lastReveal: null,
       winnerId: null,
     };
-    return { ...blank, dice: rollHands(blank, rng) };
   },
 
   currentPlayer(state) {
-    return state.winnerId ? null : state.turnId;
+    return state.winnerId || state.phase === 'roll' ? null : state.turnId;
+  },
+
+  awaiting(state) {
+    return state.winnerId || state.phase !== 'roll' ? [] : notRolled(state);
+  },
+
+  timeoutMove(state) {
+    // Не бросил кубики вовремя — за игрока не бросаем, комната исключит его.
+    if (state.phase === 'roll') return null;
+    // Молчит на своём ходу: «не верю», а если ставки ещё нет — самая маленькая ставка.
+    return state.bids.length > 0 ? { type: 'dudo' } : { type: 'bid', quantity: 1, face: 2 };
   },
 
   applyMove(state, playerId, move, rng) {
     if (state.winnerId) throw new GameRuleError('GAME_OVER', 'Игра уже окончена');
+    if (move.type === 'roll') return rollFor(state, playerId, rng);
+    if (state.phase === 'roll') throw new GameRuleError('ROLL_FIRST', 'Сначала все бросают кубики');
     if (state.turnId !== playerId) throw new GameRuleError('NOT_YOUR_TURN', 'Сейчас не ваш ход');
 
     const current = state.bids.at(-1) ?? null;
@@ -244,7 +290,7 @@ export const perudo: GameModule<PerudoState, PerudoMove> = {
       if (move.quantity > totalDice(state)) {
         throw new GameRuleError('BAD_BID', `На столе всего ${totalDice(state)} кубиков`);
       }
-      assertValidRaise(current, move, state.palifico);
+      assertValidRaise(current, move, state.maputo);
       return {
         ...state,
         bids: [...state.bids, { playerId, quantity: move.quantity, face: move.face }],
@@ -254,10 +300,10 @@ export const perudo: GameModule<PerudoState, PerudoMove> = {
 
     if (!current) throw new GameRuleError('NO_BID', 'Ещё никто не сделал ставку');
     if (current.playerId === playerId) throw new GameRuleError('OWN_BID', 'Нельзя спорить со своей ставкой');
-    if (move.type === 'calza' && state.palifico) {
-      throw new GameRuleError('NO_CALZA', 'В палифико «точно» говорить нельзя');
+    if (move.type === 'calza' && state.maputo) {
+      throw new GameRuleError('NO_CALZA', 'В мапуто «точно» говорить нельзя');
     }
-    return resolveRound(state, playerId, move.type, rng);
+    return resolveRound(state, playerId, move.type);
   },
 
   removePlayer(state, playerId) {
@@ -268,13 +314,15 @@ export const perudo: GameModule<PerudoState, PerudoMove> = {
       ...state,
       order: state.order.filter((id) => id !== playerId),
       dice,
-      palificoUsed: state.palificoUsed.filter((id) => id !== playerId),
+      maputoUsed: state.maputoUsed.filter((id) => id !== playerId),
+      rolled: state.rolled.filter((id) => id !== playerId),
     };
     const alive = activePlayers(next);
     if (alive.length === 1) return { ...next, turnId: null, winnerId: alive[0]! };
     // Ушёл тот, чей ход, — ход переходит к следующему по кругу (считаем по старому порядку).
     if (state.turnId === playerId) next.turnId = nextActive(next, playerId, state.order);
-    return next;
+    // Ушёл последний, кого ждали в фазе броска, — начинаем ставки.
+    return startBiddingIfReady(next);
   },
 
   winner(state) {
@@ -293,7 +341,9 @@ export const perudo: GameModule<PerudoState, PerudoMove> = {
     for (const id of state.order) {
       const own = dice[id] ?? [];
       // После финала новых кубиков не бросали — последние открытые лежат в lastReveal.
-      hands[id] = { count: own.length, dice: id === viewerId && !state.winnerId ? own : null };
+      // До броска своих кубиков ещё нет: в состоянии лежат нули.
+      const visible = id === viewerId && !state.winnerId && state.rolled.includes(id);
+      hands[id] = { count: own.length, dice: visible ? own : null };
     }
     return { ...rest, hands, totalDice: totalDice(state) };
   },

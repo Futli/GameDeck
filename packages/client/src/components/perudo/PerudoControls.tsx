@@ -12,7 +12,7 @@ const ignore = () => {};
 function isValid(prev: PerudoBid | null, quantity: number, face: number, view: PerudoView): boolean {
   if (quantity < 1 || quantity > view.totalDice) return false;
   try {
-    assertValidRaise(prev, { quantity, face }, view.palifico);
+    assertValidRaise(prev, { quantity, face }, view.maputo);
     return true;
   } catch {
     return false;
@@ -66,7 +66,7 @@ export function PerudoControls({
   const myHand = view.hands[me?.id ?? '']?.dice;
   const reveal = shownReveal(view);
   const valid = isValid(prev, quantity, face, view);
-  const faceLocked = view.palifico && prev !== null;
+  const faceLocked = view.maputo && prev !== null;
 
   return (
     <div className="pd-controls">
@@ -93,7 +93,7 @@ export function PerudoControls({
                 role="radio"
                 aria-checked={face === f}
                 className={face === f ? 'pd-face pd-face--active' : 'pd-face'}
-                disabled={busy || (faceLocked && f !== prev!.face) || (!prev && f === 1 && !view.palifico)}
+                disabled={busy || (faceLocked && f !== prev!.face) || (!prev && f === 1 && !view.maputo)}
                 onClick={() => pickFace(f)}
               >
                 <Die value={f} size={28} style={me?.dice} skin={me?.skins.dice} />
@@ -129,17 +129,17 @@ export function PerudoControls({
                 {t.perudo.dudoButton}
               </button>
               <button
-                disabled={busy || view.palifico}
+                disabled={busy || view.maputo}
                 onClick={() => send({ type: 'calza' })}
-                title={view.palifico ? t.perudo.noCalzaInPalifico : ''}
+                title={view.maputo ? t.perudo.noCalzaInMaputo : ''}
               >
                 {t.perudo.calzaButton}
               </button>
             </div>
           )}
           {prev && <Hint id="dudo" />}
-          {prev && !view.palifico && <Hint id="calza" />}
-          {view.palifico && <p className="muted center">{t.perudo.palificoRules(prev !== null)}</p>}
+          {prev && !view.maputo && <Hint id="calza" />}
+          {view.maputo && <p className="muted center">{t.perudo.maputoRules(prev !== null)}</p>}
         </>
       ) : (
         <p className="muted center">{t.perudo.waitTurn}</p>

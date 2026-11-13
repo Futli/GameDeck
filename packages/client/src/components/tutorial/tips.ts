@@ -20,8 +20,8 @@ export function relevantTips(room: RoomView, myId: string): TipId[] {
   if (shownReveal(perudo)) tips.push('reveal');
   if ((perudo.hands[myId]?.count ?? 0) === 0) return [...tips, 'eliminated'];
 
-  // В палифико единицы не джокеры, поэтому вместо подсказки про джокеров — про особый раунд.
-  tips.push('perudo-goal', perudo.palifico ? 'palifico' : 'perudo-jokers');
+  // В мапуто единицы не джокеры, поэтому вместо подсказки про джокеров — про особый раунд.
+  tips.push('perudo-goal', perudo.maputo ? 'maputo' : 'perudo-jokers');
   if (room.game?.currentPlayerId === myId) tips.push(perudo.bids.length === 0 ? 'first-bid' : 'raise');
   else tips.push('others-turn');
   return tips;
@@ -36,8 +36,8 @@ export function pickTip(room: RoomView, myId: string, seen: ReadonlySet<TipId>):
 export function tipParams(room: RoomView): TipParams {
   const perudo = perudoView(room);
   const totalDice = perudo?.totalDice ?? 0;
-  // С джокерами под номинал подходят две грани из шести, в палифико — одна.
-  const share = perudo?.palifico ? 6 : 3;
+  // С джокерами под номинал подходят две грани из шести, в мапуто — одна.
+  const share = perudo?.maputo ? 6 : 3;
   const turnName = room.players.find((p) => p.id === room.game?.currentPlayerId)?.name ?? '—';
   return { totalDice, expected: Math.round(totalDice / share), turnName };
 }

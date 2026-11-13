@@ -1,4 +1,4 @@
-import type { RoomSettings, RoomSummary } from '@gamedeck/shared';
+import type { RoomSettings, RoomSummary, Rng } from '@gamedeck/shared';
 import { AppError } from '../errors.js';
 import { Room, type PlayerInfo } from './room.js';
 
@@ -14,7 +14,11 @@ export class RoomManager {
   private readonly rooms = new Map<string, Room>();
   private readonly roomOfPlayer = new Map<string, string>();
 
-  constructor(private readonly random: () => number = Math.random) {}
+  constructor(
+    private readonly random: () => number = Math.random,
+    /** Часы для таймеров комнат; в тестах — свои. */
+    private readonly clock: () => number = Date.now,
+  ) {}
 
   get size(): number {
     return this.rooms.size;
@@ -50,7 +54,7 @@ export class RoomManager {
 
   create(player: PlayerInfo, settings?: Partial<RoomSettings>): Room {
     this.leave(player.id);
-    const room = new Room(this.newCode(), player, settings);
+    const room = new Room(this.newCode(), player, settings, this.clock);
     this.rooms.set(room.code, room);
     this.roomOfPlayer.set(player.id, room.code);
     return room;
@@ -79,6 +83,16 @@ export class RoomManager {
     room.kick(byId, targetId);
     this.afterRemoval(room, targetId);
     return room;
+  }
+
+  /**
+   * Проверить таймеры комнаты: исключить не успевших, сходить за молчащих.
+   * Возвращает исключённых — им нужно сообщить, что их убрали.
+   */
+  expire(room: Room, rng: Rng): string[] {
+    const removed = room.expire(this.clock(), rng);
+    removed.forEach((id) => this.afterRemoval(room, id));
+    return removed;
   }
 
   private afterRemoval(room: Room, playerId: string): Room | undefined {

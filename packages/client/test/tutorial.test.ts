@@ -18,7 +18,7 @@ const player = (id: string, seat: number, isHost = false): PlayerView => ({
 const players = [player('a', 0, true), player('b', 1)];
 const settings = { gameId: 'perudo', hasPassword: false } as RoomView['settings'];
 
-const lobby = (): RoomView => ({ code: 'K7M2Q', status: 'lobby', settings, players, game: null });
+const lobby = (): RoomView => ({ code: 'K7M2Q', status: 'lobby', settings, players, game: null, readyCheck: null });
 
 /** Комната с партией перудо глазами viewer: вид получен настоящим viewFor, как на сервере. */
 const playing = (state: PerudoState, viewer: string): RoomView => ({
@@ -26,15 +26,26 @@ const playing = (state: PerudoState, viewer: string): RoomView => ({
   status: 'playing',
   settings,
   players,
-  game: { gameId: 'perudo', state: perudo.viewFor(state, viewer), currentPlayerId: state.turnId, winnerId: null },
+  game: {
+    gameId: 'perudo',
+    state: perudo.viewFor(state, viewer),
+    currentPlayerId: state.turnId,
+    awaiting: [],
+    msLeft: null,
+    pot: 0,
+    winnerId: null,
+  },
+  readyCheck: null,
 });
 
 const table = (over: Partial<PerudoState> = {}): PerudoState => ({
   order: ['a', 'b'],
   dice: { a: [2, 3, 4, 5, 6], b: [1, 1, 2, 2, 3] },
   round: 1,
-  palifico: false,
-  palificoUsed: [],
+  phase: 'bid',
+  rolled: ['a', 'b'],
+  maputo: false,
+  maputoUsed: [],
   eliminated: [],
   turnId: 'a',
   bids: [],
@@ -64,20 +75,20 @@ describe('обучение: какая подсказка сейчас', () => {
     expect(relevantTips(playing(afterBid, 'b'), 'b').at(-1)).toBe('raise');
   });
 
-  it('вскрытие объясняется первым, в палифико вместо джокеров — особый раунд', () => {
+  it('вскрытие объясняется первым, в мапуто вместо джокеров — особый раунд', () => {
     const reveal = {
       round: 1,
       call: 'dudo' as const,
       callerId: 'b',
       bid: { playerId: 'a', quantity: 9, face: 6 },
-      palifico: false,
+      maputo: false,
       dice: { a: [2, 3, 4, 5, 6], b: [1, 1, 2, 2, 3] },
       actual: 3,
       loserId: 'a',
       gainerId: null,
     };
-    const state = table({ round: 2, palifico: true, dice: { a: [6], b: [1, 2, 3, 4, 5] }, lastReveal: reveal });
-    expect(relevantTips(playing(state, 'a'), 'a')).toEqual(['reveal', 'perudo-goal', 'palifico', 'first-bid']);
+    const state = table({ round: 2, maputo: true, dice: { a: [6], b: [1, 2, 3, 4, 5] }, lastReveal: reveal });
+    expect(relevantTips(playing(state, 'a'), 'a')).toEqual(['reveal', 'perudo-goal', 'maputo', 'first-bid']);
   });
 
   it('выбывшему — только про выбывание', () => {
@@ -90,9 +101,9 @@ describe('обучение: какая подсказка сейчас', () => {
     expect(pickTip(room, 'a', new Set(relevantTips(room, 'a')))).toBeNull();
   });
 
-  it('ориентир для ставки: треть кубиков с джокерами, шестая часть в палифико', () => {
+  it('ориентир для ставки: треть кубиков с джокерами, шестая часть в мапуто', () => {
     expect(tipParams(playing(table(), 'a'))).toMatchObject({ totalDice: 10, expected: 3, turnName: 'A' });
-    const palifico = table({ palifico: true, dice: { a: [6], b: [1, 2, 3, 4, 5, 6, 6] } });
-    expect(tipParams(playing(palifico, 'a')).expected).toBe(1);
+    const maputo = table({ maputo: true, dice: { a: [6], b: [1, 2, 3, 4, 5, 6, 6] } });
+    expect(tipParams(playing(maputo, 'a')).expected).toBe(1);
   });
 });

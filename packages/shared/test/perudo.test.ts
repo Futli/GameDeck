@@ -12,8 +12,10 @@ const table = (hands: Record<string, number[]>, over: Partial<PerudoState> = {})
   order: Object.keys(hands),
   dice: hands,
   round: 1,
-  palifico: false,
-  palificoUsed: [],
+  phase: 'bid',
+  rolled: Object.keys(hands),
+  maputo: false,
+  maputoUsed: [],
   eliminated: [],
   turnId: Object.keys(hands)[0]!,
   bids: [],
@@ -25,22 +27,53 @@ const table = (hands: Record<string, number[]>, over: Partial<PerudoState> = {})
 const rest = dice(); // для новых раундов, где значения кубиков не важны
 
 describe('perudo', () => {
-  it('старт: у каждого 5 кубиков, первым ходит первый по месту', () => {
-    const s = perudo.start(['a', 'b'], dice(1, 2, 3, 4, 5, 6, 6, 6, 6, 6));
+  it('старт: каждый сам бросает 5 кубиков, без очереди; потом первым ходит первый по месту', () => {
+    let s = perudo.start(['a', 'b'], rest);
+    expect(s.phase).toBe('roll');
+    expect(perudo.currentPlayer(s)).toBeNull();
+    expect(perudo.awaiting!(s)).toEqual(['a', 'b']);
+    expect((perudo.viewFor!(s, 'a') as PerudoView).hands.a).toEqual({ count: 5, dice: null });
+    expect(() => perudo.applyMove(s, 'a', { type: 'bid', quantity: 1, face: 2 }, rest)).toThrow('бросают');
+    expect(perudo.timeoutMove!(s, 'a')).toBeNull(); // за молчащего не бросаем — его исключат
+
+    s = perudo.applyMove(s, 'b', { type: 'roll' }, dice(6, 6, 6, 6, 6));
+    expect(() => perudo.applyMove(s, 'b', { type: 'roll' }, rest)).toThrow('уже бросили');
+    expect(perudo.awaiting!(s)).toEqual(['a']);
+    expect((perudo.viewFor!(s, 'b') as PerudoView).hands.b?.dice).toEqual([6, 6, 6, 6, 6]);
+    s = perudo.applyMove(s, 'a', { type: 'roll' }, dice(1, 2, 3, 4, 5));
+
     expect(s.dice).toEqual({ a: [1, 2, 3, 4, 5], b: [6, 6, 6, 6, 6] });
+    expect(s.phase).toBe('bid');
+    expect(perudo.awaiting!(s)).toEqual([]);
     expect(perudo.currentPlayer(s)).toBe('a');
     expect(s.round).toBe(1);
   });
 
+  it('время на ход вышло: без ставки — минимальная ставка, со ставкой — «не верю»', () => {
+    let s = table({ a: [2, 2], b: [3, 3] });
+    expect(perudo.timeoutMove!(s, 'a')).toEqual({ type: 'bid', quantity: 1, face: 2 });
+    s = perudo.applyMove(s, 'a', { type: 'bid', quantity: 2, face: 2 }, rest);
+    expect(perudo.timeoutMove!(s, 'b')).toEqual({ type: 'dudo' });
+  });
+
+  it('ушёл последний, кто не бросил кубики, — начинаются ставки', () => {
+    let s = perudo.start(['a', 'b', 'c'], rest);
+    s = perudo.applyMove(s, 'b', { type: 'roll' }, rest);
+    s = perudo.applyMove(s, 'c', { type: 'roll' }, rest);
+    s = perudo.removePlayer(s, 'a');
+    expect(s.phase).toBe('bid');
+    expect(perudo.currentPlayer(s)).toBe('b');
+  });
+
   it('правила повышения ставки', () => {
     const bid = (quantity: number, face: number) => ({ playerId: 'x', quantity, face });
-    const ok = (prev: ReturnType<typeof bid> | null, q: number, f: number, palifico = false) =>
-      expect(() => assertValidRaise(prev, { quantity: q, face: f }, palifico)).not.toThrow();
-    const bad = (prev: ReturnType<typeof bid> | null, q: number, f: number, palifico = false) =>
-      expect(() => assertValidRaise(prev, { quantity: q, face: f }, palifico)).toThrow();
+    const ok = (prev: ReturnType<typeof bid> | null, q: number, f: number, maputo = false) =>
+      expect(() => assertValidRaise(prev, { quantity: q, face: f }, maputo)).not.toThrow();
+    const bad = (prev: ReturnType<typeof bid> | null, q: number, f: number, maputo = false) =>
+      expect(() => assertValidRaise(prev, { quantity: q, face: f }, maputo)).toThrow();
 
     bad(null, 2, 1); // начинать с единиц нельзя
-    ok(null, 2, 1, true); // а в палифико можно
+    ok(null, 2, 1, true); // а в мапуто можно
     ok(bid(3, 4), 4, 2); // больше кубиков — любой номинал
     ok(bid(3, 4), 3, 5); // столько же, номинал выше
     bad(bid(3, 4), 3, 3);
@@ -48,7 +81,7 @@ describe('perudo', () => {
     bad(bid(5, 4), 2, 1);
     ok(bid(3, 1), 7, 2); // с единиц — вдвое больше плюс один
     bad(bid(3, 1), 6, 6);
-    bad(bid(3, 4), 4, 5, true); // в палифико номинал фиксирован
+    bad(bid(3, 4), 4, 5, true); // в мапуто номинал фиксирован
     ok(bid(3, 4), 4, 4, true);
   });
 
@@ -76,7 +109,8 @@ describe('perudo', () => {
     expect(s.dice.b).toHaveLength(5);
     expect(s.round).toBe(2);
     expect(s.bids).toEqual([]);
-    expect(perudo.currentPlayer(s)).toBe('a');
+    expect(s.phase).toBe('roll');
+    expect(s.turnId).toBe('a');
   });
 
   it('единицы — джокеры: «не верю» на верную ставку стоит кубика сказавшему', () => {
@@ -85,7 +119,7 @@ describe('perudo', () => {
     s = perudo.applyMove(s, 'b', { type: 'dudo' }, rest);
     expect(s.lastReveal).toMatchObject({ actual: 4, loserId: 'b' });
     expect(s.dice.b).toHaveLength(4);
-    expect(perudo.currentPlayer(s)).toBe('b');
+    expect(s.turnId).toBe('b');
   });
 
   it('«точно»: угадал — кубик возвращается (не больше 5), ошибся — теряешь', () => {
@@ -95,7 +129,7 @@ describe('perudo', () => {
     const exact = perudo.applyMove(s, 'b', { type: 'calza' }, rest);
     expect(exact.lastReveal).toMatchObject({ call: 'calza', actual: 4, gainerId: 'b', loserId: null });
     expect(exact.dice.b).toHaveLength(5);
-    expect(perudo.currentPlayer(exact)).toBe('b');
+    expect(exact.turnId).toBe('b');
 
     let full = table({ a: [5, 5, 1], b: [5, 2, 2, 2, 2] });
     full = perudo.applyMove(full, 'a', { type: 'bid', quantity: 4, face: 5 }, rest);
@@ -109,22 +143,24 @@ describe('perudo', () => {
     expect(miss.dice.a).toHaveLength(2);
   });
 
-  it('палифико: первый раз с одним кубиком — единицы не джокеры, номинал не меняется', () => {
+  it('мапуто: первый раз с одним кубиком — единицы не джокеры, номинал не меняется', () => {
     let s = table({ a: [3, 3, 3], b: [4, 4] });
     s = perudo.applyMove(s, 'a', { type: 'bid', quantity: 3, face: 4 }, rest);
-    s = perudo.applyMove(s, 'b', { type: 'dudo' }, dice(1, 1, 1, 4));
+    s = perudo.applyMove(s, 'b', { type: 'dudo' }, rest);
     // Четвёрок всего 2 из заявленных 3 — ставка неверна, кубик теряет a (у него осталось 2, не 1).
     expect(s.lastReveal?.loserId).toBe('a');
-    expect(s.palifico).toBe(false);
+    expect(s.maputo).toBe(false);
 
     // Теперь доводим b до одного кубика.
     s = table({ a: [3, 3, 3], b: [4, 4] }, { turnId: 'b' });
     s = perudo.applyMove(s, 'b', { type: 'bid', quantity: 2, face: 3 }, rest);
     s = perudo.applyMove(s, 'a', { type: 'bid', quantity: 3, face: 3 }, rest);
-    s = perudo.applyMove(s, 'b', { type: 'dudo' }, dice(1, 1, 1, 4));
+    s = perudo.applyMove(s, 'b', { type: 'dudo' }, rest);
     expect(s.lastReveal?.loserId).toBe('b');
-    expect(s.palifico).toBe(true);
-    expect(s.palificoUsed).toEqual(['b']);
+    expect(s.maputo).toBe(true);
+    expect(s.maputoUsed).toEqual(['b']);
+    s = perudo.applyMove(s, 'a', { type: 'roll' }, dice(1, 1, 1));
+    s = perudo.applyMove(s, 'b', { type: 'roll' }, dice(4));
     expect(perudo.currentPlayer(s)).toBe('b');
     expect(s.dice).toEqual({ a: [1, 1, 1], b: [4] });
 
@@ -132,9 +168,9 @@ describe('perudo', () => {
     expect(() => perudo.applyMove(s, 'b', { type: 'calza' }, rest)).toThrow();
     s = perudo.applyMove(s, 'b', { type: 'bid', quantity: 2, face: 4 }, rest);
     expect(() => perudo.applyMove(s, 'a', { type: 'bid', quantity: 3, face: 5 }, rest)).toThrow('номинал');
-    expect(() => perudo.applyMove(s, 'a', { type: 'calza' }, rest)).toThrow('палифико');
+    expect(() => perudo.applyMove(s, 'a', { type: 'calza' }, rest)).toThrow('мапуто');
     s = perudo.applyMove(s, 'a', { type: 'dudo' }, rest);
-    expect(s.lastReveal).toMatchObject({ actual: 1, loserId: 'b', palifico: true });
+    expect(s.lastReveal).toMatchObject({ actual: 1, loserId: 'b', maputo: true });
 
     // У b кончились кубики — a победил.
     expect(perudo.winner(s)).toBe('a');

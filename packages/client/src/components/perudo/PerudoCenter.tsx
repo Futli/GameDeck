@@ -13,7 +13,7 @@ export function PerudoCenter({ view, nameOf }: { view: PerudoView; nameOf: (id: 
     <>
       <div className="round">
         {t.perudo.round(view.round)}
-        {view.palifico && !view.winnerId && <span className="pd-palifico"> · {t.perudo.palifico}</span>}
+        {view.maputo && !view.winnerId && <span className="pd-maputo"> · {t.perudo.maputo}</span>}
       </div>
       <div className="muted">{t.perudo.diceOnTable(view.totalDice)}</div>
 
@@ -49,7 +49,8 @@ export function PerudoCenter({ view, nameOf }: { view: PerudoView; nameOf: (id: 
         </div>
       )}
 
-      {!view.winnerId && view.turnId && (
+      {!view.winnerId && view.phase === 'roll' && <div>{t.perudo.allRolling}</div>}
+      {!view.winnerId && view.phase === 'bid' && view.turnId && (
         <div>
           {t.table.turn} <b>{nameOf(view.turnId)}</b>
         </div>

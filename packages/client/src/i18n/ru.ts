@@ -30,6 +30,7 @@ export const ru = {
     connecting: 'Подключаемся к серверу…',
     telegramAuthFailed: 'Не удалось проверить вход через Telegram. Закройте и откройте игру заново.',
     kicked: 'Хост исключил вас из комнаты',
+    kickedTimeout: 'Время на ответ вышло — вы вышли из комнаты',
   },
 
   /** Названия и описания игр по id из реестра shared. Нет перевода — берётся title из реестра. */
@@ -117,8 +118,37 @@ export const ru = {
     shareText: (code: string) => `Заходи в GameDeck, комната ${code}`,
     roll: 'Бросить кубик',
     start: 'Начать игру',
-    again: 'Ещё партию',
     hostWillStart: 'Хост начнёт игру, когда все соберутся',
+    yourTurn: 'Ваш ход',
+    turnOf: (name: string) => `Ходит ${name}`,
+  },
+
+  /** Всплывающие окна потока партии: комната ожидания, итог, общий бросок. */
+  flow: {
+    startTitle: 'Партия начинается',
+    endTitle: 'Партия окончена',
+    win: 'Победа!',
+    winner: (name: string) => `Победил ${name}`,
+    someone: 'другой игрок',
+    noStake: 'без ставки',
+    stake: (n: number) => `ставка ${n} мон.`,
+    stakeLabel: 'Ставка',
+    changeStake: 'Сменить',
+    playing: '✓ играет',
+    thinking: 'думает…',
+    answerOrLeave: 'Кто не ответит — выйдет',
+    hostDecides: 'Кто-то вышел. Хост может подождать нового игрока или начать без него.',
+    notEnough: 'Игроков не хватает — ждём, пока кто-нибудь войдёт по коду.',
+    play: 'Играю',
+    playAgain: 'Играть ещё',
+    startWithout: 'Начать без ушедших',
+    waitOthers: 'Ждём остальных…',
+    leaveRoom: 'Выйти из комнаты',
+    maputoNote: 'Мапуто: единицы не джокеры, номинал после первой ставки не меняется',
+    rollDice: 'Бросить кубики',
+    rollOrOut: 'Не бросил — выбыл',
+    waitRolls: 'Ждём, пока бросят остальные…',
+    seconds: (n: number) => `${n} с`,
   },
 
   settings: {
@@ -147,8 +177,9 @@ export const ru = {
 
   perudo: {
     round: (n: number) => `Раунд ${n}`,
-    palifico: 'палифико',
+    maputo: 'мапуто',
     diceOnTable: (n: number) => `На столе ${n} куб.`,
+    allRolling: 'Все бросают кубики',
     dudo: '«Не верю!»',
     calza: '«Точно!»',
     revealed: (bid: string, actual: number) => `Ставка ${bid}, нашлось ${actual}`,
@@ -162,9 +193,8 @@ export const ru = {
     bid: (bid: string) => `Ставка: ${bid}`,
     dudoButton: 'Не верю!',
     calzaButton: 'Точно!',
-    noCalzaInPalifico: 'В палифико нельзя',
-    palificoRules: (faceLocked: boolean) =>
-      `Палифико: единицы не джокеры${faceLocked ? ', номинал менять нельзя' : ''}`,
+    noCalzaInMaputo: 'В мапуто нельзя',
+    maputoRules: (faceLocked: boolean) => `Мапуто: единицы не джокеры${faceLocked ? ', номинал менять нельзя' : ''}`,
     waitTurn: 'Ждём ход другого игрока',
     /** «4 пятёрки», «1 единица». */
     bidText: (quantity: number, face: number) => `${quantity} ${pluralRu(quantity, ...FACES[face]!)}`,

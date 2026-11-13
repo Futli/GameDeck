@@ -16,7 +16,7 @@ export type TipId =
   | 'raise'
   | 'others-turn'
   | 'reveal'
-  | 'palifico'
+  | 'maputo'
   | 'eliminated'
   | 'finished';
 
@@ -108,8 +108,8 @@ const ru: Dictionary = {
         'Если их меньше ставки, кубик теряет тот, кто ставил; если хватает — тот, кто сказал «Не верю!». ' +
         'После «Точно!»: угадал ровно — получаешь кубик, не угадал — теряешь. Следующий раунд начинает тот, у кого изменилось число кубиков.',
     },
-    palifico: {
-      title: 'Особый раунд: палифико',
+    maputo: {
+      title: 'Особый раунд: мапуто',
       body: () =>
         'У одного из игроков остался последний кубик. В этом раунде единицы не джокеры, ' +
         'номинал после первой ставки менять нельзя, только поднимать количество, а «Точно!» не работает.',
@@ -206,8 +206,8 @@ const en: Dictionary = {
         'If there are fewer than bid, the bidder loses a die; if there are enough, the player who called “Liar!” loses one. ' +
         'After “Exact!”: guess it exactly and you gain a die, miss and you lose one. The next round starts with the player whose dice count changed.',
     },
-    palifico: {
-      title: 'Special round: palifico',
+    maputo: {
+      title: 'Special round: maputo',
       body: () =>
         'A player is down to the last die. This round ones are not wild, ' +
         'the face can’t change after the first bid, only the quantity goes up, and “Exact!” is not allowed.',

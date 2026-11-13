@@ -68,7 +68,10 @@ describe('socket protocol', () => {
     const notHost = await b.socket.emitWithAck('game:start');
     expect(notHost).toMatchObject({ ok: false, error: { code: 'NOT_HOST' } });
 
-    await call(a.socket.emitWithAck('game:start'));
+    // Хост начинает — у всех модалка, партия стартует, когда подтвердит Боб.
+    const waiting = await call<RoomView>(a.socket.emitWithAck('game:start'));
+    expect(waiting).toMatchObject({ status: 'lobby', readyCheck: { reason: 'start', ready: [a.session.playerId] } });
+    expect((await call<RoomView>(b.socket.emitWithAck('room:ready'))).status).toBe('playing');
     const recorded = new Promise<MatchRecord>((resolve) => a.socket.once('match:recorded', resolve));
     const outOfTurn = await b.socket.emitWithAck('game:move', { type: 'roll' });
     expect(outOfTurn).toMatchObject({ ok: false, error: { code: 'NOT_YOUR_TURN' } });
@@ -82,6 +85,7 @@ describe('socket protocol', () => {
 
     expect(view.status).toBe('finished');
     expect(view.game?.winnerId).toBe(b.session.playerId);
+    expect(view.readyCheck).toMatchObject({ reason: 'rematch', ready: [] });
 
     // После партии сервер пишет её в базу и рассылает изменение рейтинга.
     const record = await recorded;
@@ -136,7 +140,7 @@ describe('socket protocol', () => {
 
     const kicked = new Promise((resolve) => b.socket.once('room:kicked', resolve));
     await call(a.socket.emitWithAck('room:kick', { playerId: b.session.playerId }));
-    expect(await kicked).toEqual({ code: room.code });
+    expect(await kicked).toEqual({ code: room.code, reason: 'host' });
   });
 
   it('отключившийся игрок помечается офлайн, а после паузы уходит из комнаты', async () => {
@@ -161,8 +165,12 @@ describe('socket protocol', () => {
     );
     await call(b.socket.emitWithAck('room:join', { code: room.code, name: 'Боб', color: 'blue' }));
 
+    await call(a.socket.emitWithAck('game:start'));
+    await call(b.socket.emitWithAck('room:ready'));
+    // Раунд начинается с броска: каждый бросает сам, без очереди.
+    await call(b.socket.emitWithAck('game:move', { type: 'roll' }));
     const bobState = new Promise<RoomView>((resolve) => b.socket.once('room:state', resolve));
-    const forAlice = await call<RoomView>(a.socket.emitWithAck('game:start'));
+    const forAlice = await call<RoomView>(a.socket.emitWithAck('game:move', { type: 'roll' }));
     const forBob = await bobState;
     const aliceId = a.session.playerId;
     const bobId = b.session.playerId;

@@ -20,7 +20,7 @@ export function PerudoMat({ view, player, myId }: { view: PerudoView; player: Pl
       <div className="pd-mat">
         <div className="pd-dice">
           {revealed.map((value, i) => (
-            <span key={i} className={matchesBid(value, reveal.bid.face, reveal.palifico) ? 'pd-hit' : 'pd-miss'}>
+            <span key={i} className={matchesBid(value, reveal.bid.face, reveal.maputo) ? 'pd-hit' : 'pd-miss'}>
               <Die value={value} size={21} style={player.dice} skin={player.skins.dice} />
             </span>
           ))}
