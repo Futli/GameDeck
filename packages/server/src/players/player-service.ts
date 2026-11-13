@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { parseDiceStyle, type DiceStyle, type MyProfile, type SessionInfo } from '@gamedeck/shared';
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   coinTransactions,
@@ -199,7 +199,7 @@ export class PlayerService {
   }
 
   /**
-   * Профиль для главного экрана: имя, баланс и итоги по всем играм.
+   * Профиль для главного экрана: имя, баланс, итоги по всем играм и текущий рейтинг в каждой.
    * Монеты считаем по журналу: match_win — выигрыш, match_stake — проигрыш.
    */
   async me(playerId: string): Promise<MyProfile | null> {
@@ -209,14 +209,18 @@ export class PlayerService {
       .where(eq(players.id, playerId));
     if (!player) return null;
 
-    const [[games], [money]] = await Promise.all([
+    const [ratings, [money]] = await Promise.all([
       this.db
         .select({
-          gamesPlayed: sql<number>`coalesce(sum(${playerGameStats.gamesPlayed}), 0)::int`,
-          wins: sql<number>`coalesce(sum(${playerGameStats.wins}), 0)::int`,
+          gameId: playerGameStats.gameId,
+          rating: playerGameStats.rating,
+          peakRating: playerGameStats.peakRating,
+          gamesPlayed: playerGameStats.gamesPlayed,
+          wins: playerGameStats.wins,
         })
         .from(playerGameStats)
-        .where(eq(playerGameStats.playerId, playerId)),
+        .where(and(eq(playerGameStats.playerId, playerId), gt(playerGameStats.gamesPlayed, 0)))
+        .orderBy(desc(playerGameStats.gamesPlayed), desc(playerGameStats.rating)),
       this.db
         .select({
           coinsWon: sql<number>`coalesce(sum(${coinTransactions.amount}) filter (where ${coinTransactions.reason} = 'match_win'), 0)::int`,
@@ -227,7 +231,18 @@ export class PlayerService {
           and(eq(coinTransactions.playerId, playerId), inArray(coinTransactions.reason, ['match_win', 'match_stake'])),
         ),
     ]);
-    return { ...player, ...games!, ...money! };
+    return {
+      ...player,
+      gamesPlayed: ratings.reduce((sum, r) => sum + r.gamesPlayed, 0),
+      wins: ratings.reduce((sum, r) => sum + r.wins, 0),
+      ...money!,
+      ratings: ratings.map(({ gameId, rating, peakRating, gamesPlayed }) => ({
+        gameId,
+        rating,
+        peakRating,
+        gamesPlayed,
+      })),
+    };
   }
 
   /** Аватар из Telegram, если игрок входил через Mini App. */

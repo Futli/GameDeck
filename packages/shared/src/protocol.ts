@@ -208,6 +208,20 @@ export interface MyProfile {
   coinsWon: number;
   /** Всего проиграно монет на ставках (положительное число). */
   coinsLost: number;
+  /**
+   * Текущий рейтинг по каждой игре, в которую игрок сыграл хотя бы раз;
+   * сначала та, в которую он играл больше всего. Новичку — пустой список.
+   */
+  ratings: GameRating[];
+}
+
+/** Рейтинг игрока в одной игре (Эло, у новичка 1000). */
+export interface GameRating {
+  gameId: string;
+  rating: number;
+  /** Лучший рейтинг за всё время. */
+  peakRating: number;
+  gamesPlayed: number;
 }
 
 /** Данные, которые Socket.IO хранит на каждом сокете (socket.data). */

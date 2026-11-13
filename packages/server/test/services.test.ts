@@ -82,7 +82,22 @@ describe('база: игроки, статистика, магазин', () => {
         wins: 0,
         coinsWon: 0,
         coinsLost: 0,
+        ratings: [],
       });
+    });
+
+    it('профиль показывает текущий рейтинг в каждой игре, самая частая игра первой', async () => {
+      const ids = [(await players.register()).playerId, (await players.register()).playerId];
+      await stats.recordMatch(match(ids, 0));
+      await stats.recordMatch(match(ids, 1));
+      await stats.recordMatch({ ...match(ids, 0), gameId: 'perudo' });
+
+      const me = await players.me(ids[0]!);
+      expect(me?.ratings).toHaveLength(2);
+      const [diceHigh, perudo] = me!.ratings;
+      expect(diceHigh).toMatchObject({ gameId: 'dice-high', gamesPlayed: 2, peakRating: 1016 });
+      expect(diceHigh!.rating).toBeLessThan(1016);
+      expect(perudo).toEqual({ gameId: 'perudo', rating: 1016, peakRating: 1016, gamesPlayed: 1 });
     });
 
     it('ставка: проигравшие платят, победитель забирает банк, профиль считает итоги', async () => {

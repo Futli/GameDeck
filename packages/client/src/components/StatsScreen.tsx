@@ -37,14 +37,14 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
           <Coins value={match.coins} />
         </b>
         <span className="muted">{t.stats.stake(match.stake)}</span>
-        <span className="muted">{t.stats.rating(signed(rating))}</span>
+        <span className="muted">{t.stats.rating(match.ratingAfter, signed(rating))}</span>
       </div>
     </li>
   );
 }
 
 /**
- * Статистика игрока: итоги по всем играм и история партий — чем кончилась каждая
+ * Статистика игрока: итоги по всем играм, текущий рейтинг в каждой игре и история партий — чем кончилась каждая
  * и сколько монет принесла. Монеты берутся из журнала, поэтому проигранная ставка
  * ушедшего из партии игрока тоже видна здесь как минус.
  */
@@ -109,6 +109,23 @@ export function StatsScreen({ profile, onBack }: { profile: MyProfile; onBack: (
           <span>{t.stats.net}</span>
         </div>
       </div>
+
+      {profile.ratings.length > 0 && (
+        <>
+          <h3 className="screen-subtitle">{t.stats.ratings}</h3>
+          <ul className="history">
+            {profile.ratings.map((r) => (
+              <li key={r.gameId} className="history-row history-row--rating">
+                <div className="history-row__main">
+                  <b>{gameTitle(r.gameId, t)}</b>
+                  <span className="muted">{t.stats.ratingInfo(r.peakRating, r.gamesPlayed)}</span>
+                </div>
+                <b className="rating-value">{r.rating}</b>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h3 className="screen-subtitle">{t.stats.history}</h3>
       {matches === null ? (
