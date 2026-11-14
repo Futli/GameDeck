@@ -482,6 +482,23 @@ select {
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
+/*
+ * Редкость — свой цвет в --rarity: рамка карточки и подпись редкости. Цвета свои, не из темы
+ * Telegram, чтобы не совпасть с кнопками (у Telegram они часто синие, как «редкий»).
+ */
+.rarity--common {
+  --rarity: #6b7280;
+}
+.rarity--rare {
+  --rarity: #3d7bf0;
+}
+.rarity--epic {
+  --rarity: #b05cf0;
+}
+.rarity-label {
+  color: var(--rarity);
+  font-weight: 600;
+}
 .skin-card {
   position: relative;
   display: flex;
@@ -490,7 +507,8 @@ select {
   gap: 4px;
   padding: 10px;
   background: var(--surface);
-  border: 2px solid transparent;
+  /* Рамка — только редкость («Стандартный» без редкости — без рамки). «Надет» показывает значок, рамку не трогает. */
+  border: 2px solid var(--rarity, transparent);
   text-align: center;
   font-size: 0.9rem;
 }
@@ -501,26 +519,22 @@ select {
   /* Надетый скин — неактивная кнопка, но не бледная: его надо хорошо видеть. */
   opacity: 1;
 }
-.skin-card--rare {
-  border-color: #3d6fd8;
+.skin-card.rarity--epic,
+.luck-prize.rarity--epic {
+  box-shadow: 0 0 12px -2px var(--rarity);
 }
-.skin-card--epic {
-  border-color: #a050e0;
-}
-.skin-card--equipped {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
+/* Значок «Надет»: зелёный, ни с одной редкостью и ни с цветом темы не спутать. */
 .skin-card__badge {
   position: absolute;
   top: 6px;
   right: 6px;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-text);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--good);
+  color: #0d2416;
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
 }
 .skin-card__default {
   display: grid;
@@ -1451,7 +1465,7 @@ select {
   align-items: center;
   gap: 6px;
   padding: 14px;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--rarity, var(--accent));
   border-radius: var(--radius);
   background: var(--surface);
   text-align: center;

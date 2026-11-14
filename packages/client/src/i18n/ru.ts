@@ -124,7 +124,7 @@ export const ru = {
     loading: 'Загружаем…',
     standard: 'Стандартный',
     playerColor: 'Цвет игрока',
-    equipped: 'Надет',
+    equipped: '✓ Надет',
     empty: (kind: 'mat' | 'dice' | 'cup') =>
       `Скинов на ${{ mat: 'коврик', dice: 'кубики', cup: 'стакан' }[kind]} пока нет. Они выпадают в «Кубике удачи» у бота.`,
   },

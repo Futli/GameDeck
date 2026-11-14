@@ -109,7 +109,7 @@ export const en: Messages = {
     loading: 'Loading…',
     standard: 'Standard',
     playerColor: 'Player color',
-    equipped: 'Equipped',
+    equipped: '✓ Equipped',
     empty: (kind) =>
       `No ${{ mat: 'mat', dice: 'dice', cup: 'cup' }[kind]} skins yet. They drop in the bot's Lucky Dice.`,
   },

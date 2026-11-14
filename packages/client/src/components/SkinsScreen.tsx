@@ -81,7 +81,7 @@ export function SkinsScreen({ onBack }: { onBack: () => void }) {
       ) : (
         <div className="skin-grid">
           <button
-            className={equipped ? 'skin-card' : 'skin-card skin-card--equipped'}
+            className="skin-card"
             disabled={busy || !equipped}
             onClick={() => change(() => http('/api/me/skins/unequip', { kind }))}
           >
@@ -92,14 +92,14 @@ export function SkinsScreen({ onBack }: { onBack: () => void }) {
           {ofKind.map((skin) => (
             <button
               key={skin.id}
-              className={`skin-card skin-card--${skin.rarity}${skin.equipped ? ' skin-card--equipped' : ''}`}
+              className={`skin-card rarity--${skin.rarity}`}
               disabled={busy || skin.equipped}
               onClick={() => change(() => http(`/api/skins/${skin.id}/equip`, {}))}
             >
               <SkinPreview skin={skin} />
               <b>{skin.name}</b>
               <span className="muted">
-                {t.skins.rarities[skin.rarity]} · {t.skins.serial(skin.serial)}
+                <span className="rarity-label">{t.skins.rarities[skin.rarity]}</span> · {t.skins.serial(skin.serial)}
               </span>
               {skin.equipped && <span className="skin-card__badge">{t.skins.equipped}</span>}
             </button>
