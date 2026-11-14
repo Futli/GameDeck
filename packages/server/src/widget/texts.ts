@@ -93,6 +93,16 @@ export const BOT_TEXTS = {
     allSkinsOwned: (rarity: string) => `Все скины редкости «${rarity}» уже ваши`,
     skinWon: (rarity: string, name: string) => `Выпал ${rarity} скин «${name}»`,
     itemName: (_id: string, name: string) => name,
+    invite: {
+      button: 'Позвать друга',
+      title: 'Позвать друга в «Кубик удачи»',
+      description: 'Вам обоим по 3 броска после его первого броска',
+      message: (link: string) =>
+        `🎲 Бросай кубики со мной в <a href="${link}">«Кубике удачи»</a>!\n\n` +
+        'Три кубика раз в 3 часа, монеты за каждый бросок, за тройки — скины. ' +
+        'Заходи по моей ссылке, и после твоего первого броска мы оба получим по 3 броска.',
+      play: '🎲 Бросить кубики',
+    },
   },
   en: {
     caption: 'Lucky Dice: roll the dice and collect coins.',
@@ -104,6 +114,16 @@ export const BOT_TEXTS = {
     allSkinsOwned: (rarity: string) => `You already own every ${rarity} skin`,
     skinWon: (rarity: string, name: string) => `You got a ${rarity} skin “${name}”`,
     itemName: (id: string, name: string) => ITEM_NAMES_EN[id] ?? name,
+    invite: {
+      button: 'Invite a friend',
+      title: 'Invite a friend to Lucky Dice',
+      description: 'You both get 3 rolls after their first roll',
+      message: (link: string) =>
+        `🎲 Roll the dice with me in <a href="${link}">Lucky Dice</a>!\n\n` +
+        'Three dice every 3 hours, coins for every roll and skins for triples. ' +
+        'Join with my link, and after your first roll we both get 3 extra rolls.',
+      play: '🎲 Roll the dice',
+    },
   },
 } satisfies Record<BotLang, unknown>;
 
