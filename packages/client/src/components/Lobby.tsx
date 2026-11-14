@@ -5,9 +5,10 @@ import { RoomList } from './RoomList';
 import { useClientState } from '../lib/store';
 import { Avatar } from './Avatar';
 import { ProfileStats } from './ProfileCard';
+import { LuckScreen } from './LuckScreen';
 import { SkinsScreen } from './SkinsScreen';
 import { StatsScreen } from './StatsScreen';
-import { inviteFor, linkRoomCode, startRoomCode, telegramName, telegramUser } from '../lib/telegram';
+import { inviteFor, linkRoomCode, startLuck, startRoomCode, telegramName, telegramUser } from '../lib/telegram';
 import { useT } from '../i18n';
 import { LanguageSwitch } from './LanguageSwitch';
 
@@ -25,8 +26,11 @@ export function Lobby() {
   const [newPassword, setNewPassword] = useState('');
   const [gameId, setGameId] = useState(loadGameChoice);
   const [busy, setBusy] = useState(false);
-  /** Главная или один из разделов профиля поверх неё. Набранные имя и код при этом не теряются. */
-  const [screen, setScreen] = useState<'main' | 'skins' | 'stats'>('main');
+  /**
+   * Главная или один из разделов профиля поверх неё. Набранные имя и код при этом не теряются.
+   * Из окна приза в виджете «Кубик удачи» приходят сразу на его страницу.
+   */
+  const [screen, setScreen] = useState<'main' | 'skins' | 'stats' | 'luck'>(startLuck ? 'luck' : 'main');
   const profile = useClientState((s) => s.profile);
   const nameEdited = useRef(false);
   const t = useT();
@@ -68,6 +72,14 @@ export function Lobby() {
   };
 
   if (screen === 'skins') return <SkinsScreen onBack={() => setScreen('main')} />;
+  if (screen === 'luck')
+    return (
+      <LuckScreen
+        skinId={startLuck?.skinId ?? null}
+        onBack={() => setScreen('main')}
+        onSkins={() => setScreen('skins')}
+      />
+    );
   if (screen === 'stats' && profile) return <StatsScreen profile={profile} onBack={() => setScreen('main')} />;
 
   return (
@@ -99,6 +111,9 @@ export function Lobby() {
             <button onClick={() => setScreen('skins')}>{t.lobby.mySkins}</button>
             <button onClick={() => setScreen('stats')}>{t.lobby.stats}</button>
           </div>
+          <button className="luck-link" onClick={() => setScreen('luck')}>
+            {t.lobby.luck}
+          </button>
         </>
       )}
 

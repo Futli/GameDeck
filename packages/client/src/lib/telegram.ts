@@ -71,8 +71,21 @@ export const telegramName = telegramUser
  * Приглашение в комнату приходит как startapp=K7M2Q_ab12cd34 (Telegram) или /?room=K7M2Q&ref=ab12cd34
  * (браузер): код комнаты и реферальный код того, кто поделился ссылкой. В старых ссылках кода нет.
  */
-const [startCode, ...startRef] = (tg?.initDataUnsafe.start_param ?? '').split('_');
+const startParam = tg?.initDataUnsafe.start_param ?? '';
 const urlParams = new URLSearchParams(location.search);
+
+/**
+ * Ссылка из окна приза в виджете «Кубик удачи»: startapp=luck — его страница, startapp=luck-<id скина> —
+ * она же с выпавшим скином. В браузере то же самое: /?luck и /?luck=<id скина>.
+ */
+const luckMatch = /^luck(?:-([0-9a-f-]{36}))?$/.exec(startParam);
+export const startLuck: { skinId: string | null } | null = luckMatch
+  ? { skinId: luckMatch[1] ?? null }
+  : urlParams.has('luck')
+    ? { skinId: urlParams.get('luck') || null }
+    : null;
+
+const [startCode, ...startRef] = luckMatch ? [] : startParam.split('_');
 
 /** Код комнаты из ссылки t.me/<бот>/<приложение>?startapp=…: по нему Mini App сразу садит за стол. */
 export const startRoomCode = startCode ? startCode.toUpperCase() : null;
@@ -140,4 +153,19 @@ export function inviteLink(code: string, telegramAppUrl: string | null, ref: str
 /** Открыть системное «Поделиться» Telegram со ссылкой на комнату и текстом приглашения. */
 export function shareInvite(link: string, text: string): void {
   tg?.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+}
+
+/**
+ * Чат с ботом, который присылает виджет «Кубик удачи» заново: /start dice. Адрес Mini App
+ * выглядит как https://t.me/<бот>/<приложение>, из него берём имя бота. null — бот не настроен.
+ */
+export function luckChatLink(telegramAppUrl: string | null): string | null {
+  const bot = /^https:\/\/t\.me\/([A-Za-z0-9_]+)\//.exec(telegramAppUrl ?? '')?.[1];
+  return bot ? `https://t.me/${bot}?start=dice` : null;
+}
+
+/** Открыть ссылку t.me: в Telegram — им самим, в браузере — новой вкладкой. */
+export function openTelegramLink(url: string): void {
+  if (tg) tg.openTelegramLink(url);
+  else window.open(url, '_blank', 'noopener');
 }

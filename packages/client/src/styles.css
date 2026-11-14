@@ -1257,3 +1257,76 @@ select {
 .hint-row .hint:last-child {
   text-align: right;
 }
+
+/* ─── «Кубик удачи»: правила, призы и модификаторы виджета ── */
+
+/* Кнопка на главной — в цветах стола, как сам виджет: сукно и золотая кайма. */
+.luck-link {
+  background: radial-gradient(#1b9a5c, #0a4a2e);
+  color: #ffe08a;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 2px #f2c94c;
+}
+.luck-prize {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: center;
+}
+.luck-prize .skin-preview {
+  max-width: 240px;
+}
+.luck-prize p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.luck-prize .profile-links {
+  width: 100%;
+}
+.luck-prize__label {
+  color: var(--accent);
+  font-weight: 700;
+}
+.luck-section {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.luck-section h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.luck-section ul,
+.luck-section ol {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+.luck-section li + li {
+  margin-top: 4px;
+}
+.luck-modifier p {
+  margin: 4px 0;
+}
+.luck-modifier .muted {
+  font-size: 0.85rem;
+}
+.luck-prizes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.luck-prizes td {
+  padding: 6px 0;
+  border-top: 1px solid var(--surface-2);
+  vertical-align: top;
+}
+.luck-prizes td + td {
+  padding-left: 12px;
+  color: var(--muted);
+  text-align: right;
+}

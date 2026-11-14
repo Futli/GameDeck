@@ -22,6 +22,8 @@ interface MintOptions {
   tradable?: boolean;
   /** Генератор seed; в тестах — детерминированный. */
   random?: () => number;
+  /** Выпустить внутри чужой транзакции (бросок в виджете): скин и монеты появятся или не появятся вместе. */
+  tx?: Tx;
 }
 
 type SkinRow = typeof skins.$inferSelect;
@@ -58,7 +60,8 @@ export class SkinService {
   async mint(playerId: string, kind: SkinKind, rarity: SkinRarity, options: MintOptions): Promise<SkinView> {
     for (let attempt = 0; attempt < 5; attempt++) {
       const seed = randomSkinSeed(options.random);
-      const row = await this.db.transaction(async (tx) => {
+      const db = options.tx ?? this.db;
+      const row = await db.transaction(async (tx) => {
         const [created] = await tx
           .insert(skins)
           .values({

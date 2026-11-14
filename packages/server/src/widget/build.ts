@@ -1,13 +1,6 @@
 import { deflateSync } from 'node:zlib';
-import {
-  diceShades,
-  PLAYER_COLOR_HEX,
-  type DiceStyle,
-  type PlayerColor,
-  type WidgetDice,
-  type WidgetRollOutcome,
-} from '@gamedeck/shared';
-import { assertValidMat, type MatSkin } from './mat.js';
+import { diceShades, type DiceStyle, type WidgetDice, type WidgetRollOutcome } from '@gamedeck/shared';
+import { assertValidMat, type CupSprite, type MatSkin } from './mat.js';
 import { WIDGET_SOURCE } from './source.js';
 import { WIDGET_UI, type BotLang, type WidgetUiKey } from './texts.js';
 
@@ -26,14 +19,8 @@ const STATE_MAX_BYTES = 1024;
 export interface WidgetSkins {
   mat: MatSkin;
   dice: DiceStyle;
-  cup: PlayerColor;
-}
-
-/** Куда ведут кнопки виджета. null — кнопка не показывается. Только https://t.me/…, до 256 символов. */
-export interface WidgetLinks {
-  invite: string | null;
-  ad: string | null;
-  findGame: string | null;
+  /** Надетый стакан (cupFromSkin) или стандартный цвета игрока (defaultCup). */
+  cup: CupSprite;
 }
 
 /**
@@ -49,19 +36,19 @@ export interface WidgetState {
   t: number;
   /** Баланс монет. */
   b: number;
-  /** Победы, поражения и выигранные монеты в партиях. */
-  w: number;
-  l: number;
-  c: number;
   /** Бонусные броски сверх запаса (за друзей). */
   a: number;
   /** Сколько у игрока перебросов и можно ли применить один к последнему броску (1 или 0). */
   m: number;
   u: number;
+  /**
+   * Что делает переброс и как им пользоваться, а если сейчас его применить нельзя — почему.
+   * Виджет показывает это, когда игрок нажал «Переброс». Текст присылает сервер на языке игрока:
+   * в HTML виджета на него нет байтов.
+   */
+  h?: string;
   /** Кубики последнего броска. */
   d?: WidgetDice;
-  /** Строка про приз недели. */
-  p?: string;
 }
 
 /**
@@ -85,8 +72,14 @@ export type WidgetRollAnswer =
       u: number;
       /** Фраза под кубиками целиком: событие, монеты и что выпало сверх них. Текст в виджете стоит байтов лимита. */
       x: string;
+      /**
+       * Окно приза, когда выпало что-то сверх монет (скин или модификатор): заголовок и описание
+       * через перевод строки. l — ссылка «Подробнее» в Mini App; без неё в окне только «Закрыть».
+       */
+      z?: string;
+      l?: string;
     }
-  | { e: 'NO_ROLLS' | 'NO_MOD' };
+  | { e: 'NO_ROLLS' | 'NO_MOD'; x?: string };
 
 export function measureWidget(html: string): { bytes: number; packed: number } {
   const raw = Buffer.from(html, 'utf8');
@@ -102,28 +95,23 @@ function strip(source: string): string {
     .join('\n');
 }
 
-function assertLink(url: string | null): void {
-  if (url !== null && (!url.startsWith('https://t.me/') || url.length > 256)) {
-    throw new Error(`Ссылка виджета должна начинаться с https://t.me/ и быть не длиннее 256 символов: ${url}`);
-  }
+/** Ссылку из виджета открывает openTelegramLink: только https://t.me/… и не длиннее 256 символов. */
+export function isWidgetLink(url: string): boolean {
+  return url.startsWith('https://t.me/') && url.length <= 256;
 }
 
 /**
  * Собрать HTML виджета для игрока с его скинами и на его языке. Заменить HTML у уже
  * отправленного виджета Telegram не даёт, поэтому при смене скина бот присылает новый виджет.
  */
-export function buildWidgetHtml(skins: WidgetSkins, links: WidgetLinks, lang: BotLang = 'ru'): string {
+export function buildWidgetHtml(skins: WidgetSkins, lang: BotLang = 'ru'): string {
   assertValidMat(skins.mat);
-  [links.invite, links.ad, links.findGame].forEach(assertLink);
 
   const shades = diceShades(skins.dice);
-  const cup = PLAYER_COLOR_HEX[skins.cup];
   const config = {
-    p: skins.mat.palette,
-    m: skins.mat.pixels,
+    m: { p: skins.mat.palette, s: skins.mat.pixels },
+    k: { p: skins.cup.palette, s: skins.cup.pixels },
     d: [shades.outline, skins.dice.face, shades.light, shades.shade, skins.dice.pips, shades.pipLight],
-    c: [cup.light, cup.main, cup.shade, 'rgba(0,0,0,.67)'],
-    u: { i: links.invite, a: links.ad, f: links.findGame },
   };
   // «</» внутри <script> закрыло бы тег, поэтому экранируем косую черту.
   const json = JSON.stringify(config).replaceAll('</', '<\\/');

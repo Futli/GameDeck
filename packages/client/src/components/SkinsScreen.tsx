@@ -11,7 +11,7 @@ import { skinImageUrl } from '../lib/skins';
 const PREVIEW_COLOR = PLAYER_COLOR_HEX.blue.main;
 
 /** Картинка скина: коврик целиком, кубик пятёркой (видно и грань, и точки), стакан. */
-function SkinPreview({ skin }: { skin: SkinView }) {
+export function SkinPreview({ skin }: { skin: SkinView }) {
   return (
     <img
       className={`skin-preview skin-preview--${skin.kind}`}
