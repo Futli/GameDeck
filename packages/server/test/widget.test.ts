@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DICE_STYLE, PLAYER_COLOR_HEX, SKIN_RARITIES, generateSkin } from '@gamedeck/shared';
+import { DEFAULT_DICE_STYLE, DIE_SIZE, PLAYER_COLOR_HEX, SKIN_RARITIES, generateSkin } from '@gamedeck/shared';
 import {
   buildWidgetHtml,
   encodeWidgetState,
@@ -9,6 +9,7 @@ import {
   type WidgetSkins,
   type WidgetState,
 } from '../src/widget/build.js';
+import { diceFromSkin, diceFromStyle, flatDiceStyle, PIP_SPRITE } from '../src/widget/dice.js';
 import {
   assertValidMat,
   countMatRuns,
@@ -22,7 +23,11 @@ import {
   type MatSkin,
 } from '../src/widget/mat.js';
 
-const skins: WidgetSkins = { mat: feltMat(), dice: DEFAULT_DICE_STYLE, cup: defaultCup(PLAYER_COLOR_HEX.red) };
+const skins: WidgetSkins = {
+  mat: feltMat(),
+  dice: diceFromStyle(DEFAULT_DICE_STYLE),
+  cup: defaultCup(PLAYER_COLOR_HEX.red),
+};
 
 /** Самый дорогой для сжатия коврик из допустимых: 16 цветов без повторяющегося рисунка. */
 function noisyMat(): MatSkin {
@@ -38,17 +43,29 @@ function noisyMat(): MatSkin {
 }
 
 describe('коврик виджета', () => {
-  it('любой сгенерированный коврик со стаканом влезает в виджет: по отрезкам и по 4 КБ после сжатия', () => {
+  it('любой сгенерированный коврик со стаканом и кубиками в цветах скина влезает в виджет: по отрезкам и по 4 КБ', () => {
+    let fullDiceMisses = 0;
     for (const rarity of SKIN_RARITIES)
       for (let i = 0; i < 300; i++) {
         const mat = matFromSkin(generateSkin({ kind: 'mat', seed: i * 7919 + 3, rarity }).render(), '#ff2d3d');
-        // Стакан той же редкости: эпические коврик и стакан вместе — самый тяжёлый случай.
+        // Стакан и кубики той же редкости: все три эпических разом — самый тяжёлый случай.
         const cup = cupFromSkin(generateSkin({ kind: 'cup', seed: i * 104729 + 7, rarity }).render(), '#ff2d3d');
+        const dice = { kind: 'dice' as const, seed: i * 31337 + 5, rarity };
         expect(() => assertValidMat(mat)).not.toThrow();
         expect(countMatRuns(mat)).toBeLessThan(MAT_MAX_RUNS * 0.97);
-        const html = buildWidgetHtml({ mat, dice: DEFAULT_DICE_STYLE, cup });
+        // Запасной вариант (кубики двумя цветами скина) обязан влезать всегда: на нём держится WidgetService.html.
+        const html = buildWidgetHtml({ mat, dice: diceFromStyle(flatDiceStyle(dice)), cup });
         expect(measureWidget(html).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
+        try {
+          buildWidgetHtml({ mat, dice: diceFromSkin(dice), cup });
+        } catch {
+          // Не влезли кубики пиксель в пиксель — это допустимо только для эпической тройки.
+          expect(rarity).toBe('epic');
+          fullDiceMisses++;
+        }
       }
+    // И даже у эпической тройки кубики почти всегда рисуются как есть.
+    expect(fullDiceMisses).toBeLessThan(300 * 0.05);
   });
 
   it('коврик по умолчанию проходит проверку и укладывается в лимит команд canvas', () => {
@@ -67,6 +84,43 @@ describe('коврик виджета', () => {
   it('отклоняет слишком пёстрый коврик', () => {
     const pixels = Array.from({ length: MAT_WIDTH * MAT_HEIGHT }, (_, i) => i % 2).join('');
     expect(() => assertValidMat({ palette: ['#000000', '#ffffff'], pixels })).toThrow(/пёстрый/);
+  });
+});
+
+describe('кубики виджета', () => {
+  it('скин кубиков: пустая грань — та же картинка, что у генератора, а точка ставится по сетке', () => {
+    for (const rarity of SKIN_RARITIES) {
+      const seed = { kind: 'dice' as const, seed: 42, rarity };
+      const { face, pip } = diceFromSkin(seed);
+      const blank = generateSkin(seed).render(0);
+      expect(face.pixels).toBe(Array.from(blank.pixels, (c) => c.toString(16)).join(''));
+      expect(face.pixels).toHaveLength(DIE_SIZE * DIE_SIZE);
+      expect(pip.pixels).toHaveLength(PIP_SPRITE * PIP_SPRITE);
+      // Точка нарисована (у кольца центр пустой, поэтому смотрим на весь спрайт), углы спрайта прозрачные.
+      expect(pip.pixels).toMatch(/[1-9a-f]/);
+      expect(pip.pixels[0]).toBe('0');
+      expect(face.palette[0]).toBe('#0000');
+    }
+  });
+
+  it('кубики в цветах скина берут цвет грани и точек из самого скина', () => {
+    const style = flatDiceStyle({ kind: 'dice', seed: 42, rarity: 'common' });
+    const { face } = diceFromSkin({ kind: 'dice', seed: 42, rarity: 'common' });
+    expect(face.palette).toContain(style.face);
+    expect(face.palette).toContain(style.pips);
+    expect(style.face).not.toBe(style.pips);
+  });
+
+  it('три кубика укладываются в лимит команд canvas', () => {
+    for (const rarity of SKIN_RARITIES)
+      for (let i = 0; i < 100; i++) {
+        const { face } = diceFromSkin({ kind: 'dice', seed: i * 31337 + 5, rarity });
+        let runs = 0;
+        for (let j = 0; j < face.pixels.length; j++)
+          if (j % DIE_SIZE === 0 || face.pixels[j] !== face.pixels[j - 1]) runs++;
+        // Три грани и до 18 точек по 25 пикселей — далеко от 4000 команд за задачу.
+        expect(3 * runs + 18 * 25).toBeLessThan(MAT_MAX_RUNS / 2);
+      }
   });
 });
 

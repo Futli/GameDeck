@@ -6,6 +6,7 @@ import type { PlayerService } from '../players/player-service.js';
 import type { SkinService } from '../skins/skin-service.js';
 import { BotApiError, type BotApi } from './bot-api.js';
 import { buildWidgetHtml, encodeWidgetState, isWidgetLink, type WidgetRollAnswer } from './build.js';
+import { diceFromStyle } from './dice.js';
 import { defaultCup, feltMat } from './mat.js';
 import { botLang, BOT_TEXTS, type BotLang } from './texts.js';
 import type { SentWidget, WidgetMessage, WidgetService } from './widget-service.js';
@@ -88,7 +89,7 @@ let cachedVersion: string | null = null;
  */
 export function widgetVersion(): string {
   if (cachedVersion === null) {
-    const skins = { mat: feltMat(), dice: DEFAULT_DICE_STYLE, cup: defaultCup(PLAYER_COLOR_HEX.red) };
+    const skins = { mat: feltMat(), dice: diceFromStyle(DEFAULT_DICE_STYLE), cup: defaultCup(PLAYER_COLOR_HEX.red) };
     const hash = createHash('sha256');
     for (const lang of ['ru', 'en'] as const) hash.update(buildWidgetHtml(skins, lang));
     cachedVersion = hash.digest('hex').slice(0, 12);
@@ -356,7 +357,7 @@ export class WidgetBot {
     const { api, widget, log } = this.options;
     // HTML у отправленного виджета не меняется, поэтому скины подставляются в момент отправки.
     const html = await widget.html(playerId, lang, (error, skin) =>
-      log.warn({ err: error, skin }, 'skin mat does not fit the widget, falling back to felt'),
+      log.warn({ err: error, skin }, 'widget skins do not fit, simplifying'),
     );
 
     const previous = keepPrevious ? null : await widget.lastMessage(playerId);

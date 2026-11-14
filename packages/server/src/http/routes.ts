@@ -124,7 +124,7 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
     const playerId = await requirePlayer(request);
     const { lang } = widgetQuerySchema.parse(request.query);
     const html = await widget.html(playerId, lang, (error, skin) =>
-      request.log.warn({ err: error, skin }, 'skin mat does not fit the widget, falling back to felt'),
+      request.log.warn({ err: error, skin }, 'widget skins do not fit, simplifying'),
     );
     return { html, chatData: encodeWidgetState(await widget.state(playerId, now(), lang)) };
   });
