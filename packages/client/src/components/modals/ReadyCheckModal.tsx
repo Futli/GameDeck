@@ -124,7 +124,7 @@ export function ReadyCheckModal({
             {t.flow.startWithout}
           </button>
         )}
-        {iAmReady && !(isHost && check.hostDecides) && <p className="muted center">{t.flow.waitOthers}</p>}
+        {iAmReady && !(isHost && check.hostDecides) && <p className="muted center sheet-wait">{t.flow.waitOthers}</p>}
         <button className="ghost-button" onClick={() => void api.leaveRoom().catch(ignore)}>
           {t.flow.leaveRoom}
         </button>
