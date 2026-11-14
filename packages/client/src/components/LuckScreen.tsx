@@ -65,7 +65,7 @@ export function LuckScreen({
       </header>
 
       {prize && (
-        <section className={`luck-prize skin-card--${prize.skin.rarity}`}>
+        <section className={`luck-prize rarity--${prize.skin.rarity}`}>
           <span className="luck-prize__label">{t.luck.prize}</span>
           <SkinPreview skin={prize.skin} />
           <b>
