@@ -37,6 +37,8 @@ const updateSchema = z.object({
       data: z.string(),
     })
     .optional(),
+  /** Игрок набрал «@бот …» в чате с другом: так приглашение уходит готовым сообщением со скрытой ссылкой. */
+  inline_query: z.object({ id: z.string(), from: userSchema, query: z.string() }).optional(),
 });
 
 type Update = z.infer<typeof updateSchema>;
@@ -55,6 +57,16 @@ interface WidgetBotOptions {
 /** Пауза между попытками, когда Telegram недоступен: растёт от 3 секунд до минуты. */
 const RETRY_MIN_MS = 3000;
 const RETRY_MAX_MS = 60_000;
+/** Как часто переспрашивать getMe: включение inline-режима в BotFather подхватывается без перезапуска. */
+const BOT_INFO_TTL_SEC = 10 * 60;
+
+/** Что бот знает о себе из getMe. */
+interface BotInfo {
+  url: string;
+  /** Включён ли inline-режим (BotFather → /setinline): без него приглашение уходит простой ссылкой. */
+  inline: boolean;
+  checkedAt: number;
+}
 
 /**
  * Бот с виджетом «Кубик удачи» внутри основного сервера.
@@ -68,8 +80,7 @@ export class WidgetBot {
   /** Прервать паузу между попытками: нужен, чтобы остановка сервера её не ждала. */
   private wake: (() => void) | null = null;
   private stopped: Promise<void> = Promise.resolve();
-  /** Ссылка на бота, https://t.me/<имя>: узнаётся у Telegram один раз. */
-  private botUrl: string | null = null;
+  private info: BotInfo | null = null;
   private readonly now: () => number;
 
   constructor(private readonly options: WidgetBotOptions) {
@@ -96,7 +107,7 @@ export class WidgetBot {
     let retryMs = RETRY_MIN_MS;
     while (this.running) {
       try {
-        if (this.botUrl === null) log.info({ bot: await this.resolveBotUrl() }, 'widget bot started');
+        if (this.info === null) log.info({ bot: (await this.botInfo()).url }, 'widget bot started');
         // timeout 5 секунд, а не 25: при остановке сервера не приходится долго ждать ответа.
         const updates = await api.call<unknown[]>('getUpdates', { offset, timeout: 5 }, 15_000);
         retryMs = RETRY_MIN_MS;
@@ -133,18 +144,25 @@ export class WidgetBot {
     }
   }
 
-  private async resolveBotUrl(): Promise<string> {
-    if (this.botUrl === null) {
-      const me = await this.options.api.call<{ username: string }>('getMe', {});
-      this.botUrl = `https://t.me/${me.username}`;
+  private async botInfo(): Promise<BotInfo> {
+    const now = this.now();
+    if (this.info === null || now - this.info.checkedAt >= BOT_INFO_TTL_SEC) {
+      const me = await this.options.api.call<{ username: string; supports_inline_queries?: boolean }>('getMe', {});
+      this.info = { url: `https://t.me/${me.username}`, inline: me.supports_inline_queries === true, checkedAt: now };
     }
-    return this.botUrl;
+    return this.info;
+  }
+
+  /** Личная ссылка игрока: по ней бот узнаёт, кто пригласил друга. */
+  private async referralLink(playerId: string): Promise<string> {
+    return `${(await this.botInfo()).url}?start=${referralStartParam(await this.options.players.referralCode(playerId))}`;
   }
 
   /** Обработать одно обновление. Открыт для тестов: они подают обновления без сети. */
   async handleUpdate(update: Update): Promise<void> {
     if (update.message) await this.onMessage(update.message);
     if (update.widget_query) await this.onWidgetQuery(update.widget_query);
+    if (update.inline_query) await this.onInlineQuery(update.inline_query);
   }
 
   /** Любое сообщение в личке — прислать виджет с текущим состоянием игрока. */
@@ -164,11 +182,13 @@ export class WidgetBot {
     // игрок получит виджет с сукном, а не ошибку.
     const equipped = await skins.equipped(playerId);
     const dice = await players.diceStyle(playerId);
-    // «Позвать друга» открывает «Поделиться» с личной ссылкой игрока: по ней бот узнаёт, кто пригласил.
-    // Реклама ещё не сделана, её кнопка скрыта.
-    const referral = `${await this.resolveBotUrl()}?start=${referralStartParam(await players.referralCode(playerId))}`;
+    // «Позвать друга». Ссылку за текстом умеет только inline-режим: кнопка под виджетом открывает выбор
+    // чата, и бот подставляет готовое сообщение (onInlineQuery). Из самого виджета так нельзя: у него есть
+    // только openTelegramLink, а «Поделиться» (t.me/share/url) шлёт голый адрес. Поэтому кнопка внутри
+    // виджета остаётся запасной, пока inline-режим в BotFather не включён. Реклама ещё не сделана, её кнопка скрыта.
+    const { inline } = await this.botInfo();
     const links = {
-      invite: `https://t.me/share/url?url=${encodeURIComponent(referral)}`,
+      invite: inline ? null : `https://t.me/share/url?url=${encodeURIComponent(await this.referralLink(playerId))}`,
       ad: null,
       findGame: appUrl,
     };
@@ -192,8 +212,52 @@ export class WidgetBot {
       caption: BOT_TEXTS[lang].caption,
       allow_queries: true,
       chat_data: encodeWidgetState(await widget.state(playerId, this.now())),
+      ...(inline
+        ? {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: BOT_TEXTS[lang].invite.button,
+                    switch_inline_query_chosen_chat: { query: '', allow_user_chats: true, allow_group_chats: true },
+                  },
+                ],
+              ],
+            },
+          }
+        : {}),
     });
     await widget.rememberMessage(playerId, message.chat.id, sent.message_id);
+  }
+
+  /**
+   * Приглашение через inline-режим: одно готовое сообщение, где личная ссылка спрятана за словами,
+   * и кнопка с той же ссылкой. Ответ личный (is_personal): у каждого игрока своя ссылка.
+   */
+  private async onInlineQuery(query: NonNullable<Update['inline_query']>): Promise<void> {
+    const { api, players } = this.options;
+    const playerId = await players.ensureTelegramPlayer(query.from);
+    const link = await this.referralLink(playerId);
+    const t = BOT_TEXTS[botLang(query.from.language_code)].invite;
+    await api.call('answerInlineQuery', {
+      inline_query_id: query.id,
+      is_personal: true,
+      cache_time: 300,
+      results: [
+        {
+          type: 'article',
+          id: 'invite',
+          title: t.title,
+          description: t.description,
+          input_message_content: {
+            message_text: t.message(link),
+            parse_mode: 'HTML',
+            link_preview_options: { is_disabled: true },
+          },
+          reply_markup: { inline_keyboard: [[{ text: t.play, url: link }]] },
+        },
+      ],
+    });
   }
 
   /** Запрос из виджета. Ответить нужно на каждый, иначе виджет ждёт 15 секунд и показывает ошибку. */

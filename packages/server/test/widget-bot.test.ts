@@ -326,12 +326,12 @@ describe('приглашение друга', () => {
 
 describe('бот с виджетом', () => {
   /** Вместо Telegram — запись вызовов: проверяем, что бот говорит Bot API, а не сам Bot API. */
-  function fakeApi() {
+  function fakeApi(supportsInline = false) {
     const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
     const api: BotApi = {
       call: async <T>(method: string, params: Record<string, unknown>) => {
         calls.push({ method, params });
-        if (method === 'getMe') return { username: 'example_bot' } as T;
+        if (method === 'getMe') return { username: 'example_bot', supports_inline_queries: supportsInline } as T;
         return (method === 'sendWidget' ? { message_id: 42 } : true) as T;
       },
     };
@@ -388,6 +388,47 @@ describe('бот с виджетом', () => {
     const html = calls.find((call) => call.method === 'sendWidget')!.params.html as string;
     expect(html).toContain(matFromSkin(generateSkin(mat).render(), PLAYER_COLOR_HEX.red.main).pixels);
     expect(measureWidget(html).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
+  });
+
+  it('с inline-режимом зовёт друга готовым сообщением, где ссылка спрятана за текстом', async () => {
+    const { players, skins, widget, user, playerId } = await setup(diceRng(1, 2, 4));
+    const { api, calls } = fakeApi(true);
+    const bot = new WidgetBot({ api, players, skins, widget, appUrl: null, log, now: () => 1000 });
+    const referral = `https://t.me/example_bot?start=${await startOf(players, playerId)}`;
+
+    // Кнопка уходит из виджета под него: внутри виджета есть только «Поделиться» с голым адресом.
+    await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: user } });
+    const sent = calls.find((call) => call.method === 'sendWidget')!;
+    expect(sent.params.html).not.toContain('share/url');
+    expect(sent.params.reply_markup).toEqual({
+      inline_keyboard: [
+        [
+          {
+            text: 'Позвать друга',
+            switch_inline_query_chosen_chat: { query: '', allow_user_chats: true, allow_group_chats: true },
+          },
+        ],
+      ],
+    });
+
+    await bot.handleUpdate({ update_id: 2, inline_query: { id: 'iq1', from: user, query: '' } });
+    const answer = calls.find((call) => call.method === 'answerInlineQuery')!;
+    expect(answer.params).toMatchObject({ inline_query_id: 'iq1', is_personal: true });
+    const [result] = answer.params.results as Array<{
+      input_message_content: { message_text: string; parse_mode: string };
+      reply_markup: unknown;
+    }>;
+    expect(result!.input_message_content.parse_mode).toBe('HTML');
+    expect(result!.input_message_content.message_text).toContain(`<a href="${referral}">«Кубике удачи»</a>`);
+    expect(result!.reply_markup).toEqual({ inline_keyboard: [[{ text: '🎲 Бросить кубики', url: referral }]] });
+
+    // Язык приглашения — язык Telegram у пригласившего.
+    await bot.handleUpdate({
+      update_id: 3,
+      inline_query: { id: 'iq2', from: { ...user, language_code: 'en' }, query: '' },
+    });
+    const english = calls.filter((call) => call.method === 'answerInlineQuery')[1]!;
+    expect(JSON.stringify(english.params.results)).toContain(`<a href=\\"${referral}\\">Lucky Dice</a>`);
   });
 
   it('по реферальной ссылке запоминает пригласившего и после броска друга обновляет его виджет', async () => {
