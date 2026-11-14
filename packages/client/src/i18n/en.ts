@@ -273,5 +273,6 @@ export const enErrors: Partial<Record<string, string>> = {
   NOT_OWNER: 'You don’t own this skin',
   SELF_TRANSFER: 'You can’t gift a skin to yourself',
   NOT_TRADABLE: 'This skin can’t be transferred',
+  ON_CHAIN: 'This skin is an NFT now: transfer it from your wallet',
   SKIN_SEED_EXHAUSTED: 'Could not issue a skin, please try again',
 };

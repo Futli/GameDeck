@@ -8,7 +8,17 @@ import { SKIN_RARITIES, type SkinRarity } from './themes.js';
 export { CUP_HEIGHT, CUP_WIDTH } from './cup.js';
 export { DIE_SIZE } from './dice.js';
 export { MAT_HEIGHT, MAT_WIDTH } from './mat.js';
-export { PLAYER_SLOT, decodeImage, encodeImage, resolvePalette, rotate, type PixelImage } from './image.js';
+export {
+  PLAYER_SLOT,
+  createImage,
+  decodeImage,
+  encodeImage,
+  getPixel,
+  resolvePalette,
+  rotate,
+  setPixel,
+  type PixelImage,
+} from './image.js';
 export { SKIN_RARITIES, type SkinRarity };
 
 export const SKIN_KINDS = ['mat', 'dice', 'cup'] as const;

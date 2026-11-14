@@ -239,6 +239,9 @@ export interface SocketData {
 /** Надетые скины по видам: только то, из чего генератор нарисует картинку. */
 export type EquippedSkins = Partial<Record<SkinKind, SkinSeed>>;
 
+/** Где живёт скин: в игре или как NFT на кошельке TON. */
+export type SkinCustody = 'game' | 'chain';
+
 /** Скин в инвентаре или на витрине. */
 export interface SkinView extends SkinSeed {
   id: string;
@@ -247,6 +250,8 @@ export interface SkinView extends SkinSeed {
   name: string;
   /** false — привязан к владельцу, передать нельзя. */
   tradable: boolean;
+  /** game — скин в игре; chain — выведен в NFT, двигается только в блокчейне. */
+  custody: SkinCustody;
   equipped: boolean;
   createdAt: string;
 }

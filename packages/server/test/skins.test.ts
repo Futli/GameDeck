@@ -89,6 +89,19 @@ describe('скины: выпуск, надевание, подарок', () => {
     expect(row!.ownerId).toBe(alice);
   });
 
+  it('скин, выведенный в NFT, в игре не передаётся, но надевается', async () => {
+    const alice = await newPlayer();
+    const bob = await newPlayer();
+    const mat = await skins.mint(alice, 'mat', 'epic', { source: 'drop' });
+    expect(mat.custody).toBe('game');
+    // Минта ещё нет: переводим скин в блокчейн прямо в базе, как это сделает будущий минт.
+    await database.db.update(skinsTable).set({ custody: 'chain' }).where(eq(skinsTable.id, mat.id));
+
+    await expect(skins.gift(alice, bob, mat.id)).rejects.toMatchObject({ code: 'ON_CHAIN' });
+    const [equipped] = await skins.equip(alice, mat.id);
+    expect(equipped).toMatchObject({ id: mat.id, custody: 'chain', equipped: true });
+  });
+
   it('два одновременных подарка одной вещи: доходит только один', async () => {
     const alice = await newPlayer();
     const bob = await newPlayer();

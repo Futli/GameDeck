@@ -4,6 +4,7 @@ import {
   generateSkin,
   randomSkinSeed,
   type EquippedSkins,
+  type SkinCustody,
   type SkinKind,
   type SkinRarity,
   type SkinTransferView,
@@ -40,9 +41,20 @@ function toView(row: SkinRow, equipped: boolean): SkinView {
     rarity,
     name: generateSkin({ kind, seed: row.seed, rarity }).name,
     tradable: row.tradable,
+    custody: row.custody as SkinCustody,
     equipped,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/**
+ * Можно ли передать скин внутри игры. Одна проверка на все пути, которые меняют владельца:
+ * подарок сейчас, рынок и аукцион потом. Скин, выведенный в NFT, двигается только в блокчейне,
+ * иначе запись в базе и владелец на кошельке разойдутся.
+ */
+export function assertMovableInGame(skin: Pick<SkinRow, 'tradable' | 'custody'>): void {
+  if (!skin.tradable) throw new AppError('NOT_TRADABLE', 'Этот скин нельзя передать');
+  if (skin.custody !== 'game') throw new AppError('ON_CHAIN', 'Скин выведен в NFT: передайте его с кошелька');
 }
 
 /**
@@ -170,7 +182,7 @@ export class SkinService {
     const [skin] = await tx.select().from(skins).where(eq(skins.id, t.skinId));
     if (!skin) throw new AppError('SKIN_NOT_FOUND', 'Скин не найден');
     if (skin.ownerId !== t.fromPlayerId) throw new AppError('NOT_OWNER', 'Этого скина у вас нет');
-    if (!skin.tradable) throw new AppError('NOT_TRADABLE', 'Этот скин нельзя передать');
+    assertMovableInGame(skin);
     const [recipient] = await tx.select({ id: players.id }).from(players).where(eq(players.id, t.toPlayerId));
     if (!recipient) throw new AppError('PLAYER_NOT_FOUND', 'Игрок не найден');
 
