@@ -307,6 +307,11 @@ export const skins = pgTable(
     source: text('source').notNull(),
     /** false — привязан к владельцу (например, приз за рейтинг), передать нельзя. */
     tradable: boolean('tradable').notNull().default(true),
+    /**
+     * Где живёт скин: game — в игре, владелец в owner_id; chain — выведен в NFT на кошелёк TON,
+     * и владельца определяет блокчейн. Минта пока нет, но рынок и подарки уже смотрят на это поле.
+     */
+    custody: text('custody').notNull().default('game'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

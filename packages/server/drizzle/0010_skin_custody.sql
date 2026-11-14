@@ -1,0 +1,1 @@
+ALTER TABLE "skins" ADD COLUMN "custody" text DEFAULT 'game' NOT NULL;
