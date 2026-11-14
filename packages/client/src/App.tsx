@@ -13,7 +13,12 @@ export function App() {
     <div className="app">
       {!connected && <div className="banner">{t.app.connecting}</div>}
       {room ? <RoomScreen room={room} /> : <Lobby />}
-      {notice && <div className="notice">{notice}</div>}
+      {/* key: новое сообщение появляется заново, а не подменяет текст в уже висящем. */}
+      {notice && (
+        <div className="notice" key={notice} role="status">
+          {notice}
+        </div>
+      )}
     </div>
   );
 }

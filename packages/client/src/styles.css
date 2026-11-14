@@ -13,6 +13,33 @@
   --felt-edge: #163528;
   --radius: 12px;
   color-scheme: dark;
+
+  /*
+   * Движение. Всё появляется быстро и мягко тормозит в конце (сильный ease-out), без отскоков:
+   * отскок уместен только там, где его «бросил» сам игрок. Двигаем только transform и opacity.
+   * Пиксель-арт (кубики, коврики, стаканы) не масштабируем: дробный масштаб размывает пиксели.
+   */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Окно снизу выезжает как системная шторка iOS: быстро стартует и долго доезжает. */
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press: 120ms;
+  --dur: 220ms;
+  --dur-sheet: 380ms;
+  /* На сколько поднимается появляющийся блок. В режиме «меньше движения» — 0, остаётся только проявление. */
+  --rise: 8px;
+}
+
+/* Новый экран и блок, появившийся посреди экрана, проявляются и чуть поднимаются, а не возникают рывком. */
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise));
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 * {
@@ -44,6 +71,23 @@ button {
   padding: 10px 16px;
   background: var(--surface-2);
   cursor: pointer;
+  /* Без задержки двойного тапа и без системной серой вспышки: отклик даёт сама кнопка. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    opacity var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+/* Отклик на нажатие, а не на отпускание: кнопка сразу чуть «вдавливается». */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+/* В кнопках с пиксель-артом (скины, грани кубика) масштаб размыл бы пиксели — сдвигаем на целый пиксель. */
+button.skin-card:active:not(:disabled),
+button.pd-face:active:not(:disabled) {
+  transform: translateY(1px);
 }
 button:disabled {
   opacity: 0.4;
@@ -89,17 +133,34 @@ select {
 .muted {
   color: var(--muted);
 }
+/*
+ * «Подключаемся…» висит поверх экрана, а не в потоке: раньше полоса сдвигала всю страницу вниз,
+ * а через долю секунды, когда связь появлялась, страница прыгала обратно. Проявляется с задержкой,
+ * чтобы при быстром подключении не мелькать совсем.
+ */
 .banner {
-  text-align: center;
+  position: fixed;
+  top: calc(8px + var(--safe-top, env(safe-area-inset-top, 0px)));
+  left: 50%;
+  translate: -50% 0;
+  z-index: 30;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
   color: var(--muted);
-  padding: 8px;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 16px #0006;
+  pointer-events: none;
+  animation: enter var(--dur) 600ms var(--ease-out) backwards;
 }
 
 .notice {
   position: fixed;
   left: 50%;
   bottom: calc(16px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
-  transform: translateX(-50%);
+  translate: -50% 0;
+  z-index: 30;
+  animation: enter var(--dur) var(--ease-out);
   background: var(--surface-2);
   padding: 10px 16px;
   border-radius: var(--radius);
@@ -109,6 +170,10 @@ select {
 
 /* ─── Главная ───────────────────────────────────────────── */
 
+.home,
+.screen {
+  animation: enter var(--dur) var(--ease-out);
+}
 .home {
   display: flex;
   flex-direction: column;
@@ -137,21 +202,33 @@ select {
   background: var(--surface);
   color: var(--text);
 }
-/* Виджет «Кубик удачи»: тот же HTML, что в чате с ботом, во фрейме. Высоту фрейм сообщает сам. */
+/*
+ * Виджет «Кубик удачи»: тот же HTML, что в чате с ботом, во фрейме. Высоту фрейм сообщает сам,
+ * а обёртка держит место: пока высоты нет — заготовка примерно размера виджета, дальше его высота.
+ * Изменение высоты (окно приза) обёртка проходит плавно, и блоки ниже не прыгают.
+ */
 .luck-widget {
+  overflow: hidden;
+  transition: height var(--dur) var(--ease-out);
+}
+.luck-widget--loading {
+  aspect-ratio: 1 / 1.05;
+  border-radius: 24px;
+  background: var(--surface);
+}
+.luck-widget__frame {
   /* Схема цветов как у документа во фрейме, иначе браузер зальёт прозрачные углы белым. */
   color-scheme: light;
   display: block;
   width: 100%;
-  height: 0;
+  height: 100%;
   border: 0;
   background: transparent;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
 }
-.luck-widget--loading {
-  height: auto;
-  aspect-ratio: 1 / 1.05;
-  border-radius: 24px;
-  background: var(--surface);
+.luck-widget__frame--shown {
+  opacity: 1;
 }
 .luck-rules {
   align-self: center;
@@ -290,6 +367,7 @@ select {
   gap: 8px;
 }
 .room-card {
+  animation: enter var(--dur) var(--ease-out);
   background: var(--surface);
   border-radius: var(--radius);
   padding: 10px 12px;
@@ -571,6 +649,8 @@ select {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* Только проявление: transform на .room сделал бы его опорой для окон снизу (position: fixed). */
+  animation: fade-in var(--dur) var(--ease-out);
 }
 .room-header {
   display: flex;
@@ -1016,7 +1096,10 @@ select {
 .timer-fill {
   height: 100%;
   background: var(--accent);
-  transition: width 0.25s linear;
+  transform-origin: left;
+  transition:
+    transform 0.25s linear,
+    background-color var(--dur) var(--ease-out);
 }
 .timer--low .timer-fill {
   background: var(--bad);
@@ -1040,6 +1123,11 @@ select {
   align-items: flex-end;
   justify-content: center;
   background: linear-gradient(transparent 30%, #000a);
+  /* Затемнение приходит вместе с окном, а не раньше него. */
+  animation: fade-in var(--dur-sheet) var(--ease-out) backwards;
+}
+.sheet-backdrop--late {
+  animation-delay: 1.8s;
 }
 .sheet {
   width: 100%;
@@ -1054,7 +1142,8 @@ select {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  animation: sheet-in 0.3s ease-out both;
+  overscroll-behavior: contain;
+  animation: sheet-in var(--dur-sheet) var(--ease-sheet) both;
 }
 /* После последнего хода партии окно ждёт, пока все посмотрят на открытые кубики */
 .sheet--late {
@@ -1063,7 +1152,6 @@ select {
 @keyframes sheet-in {
   from {
     transform: translateY(100%);
-    opacity: 0;
   }
 }
 .sheet-title {
@@ -1080,6 +1168,13 @@ select {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+/* «Ждём остальных» встаёт на место большой кнопки той же высоты: окно не дёргается по высоте. */
+.sheet-wait {
+  display: flex;
+  align-items: center;
+  min-height: calc(1.1rem * 1.4 + 28px);
+  margin: 0;
 }
 .ghost-button {
   background: transparent;
@@ -1117,6 +1212,9 @@ select {
   border-radius: var(--radius);
   background: var(--surface-2);
   color: var(--muted);
+  transition:
+    color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
 }
 .ready-item--yes {
   color: var(--text);
@@ -1222,6 +1320,7 @@ select {
   animation: win-bounce 0.6s 0.2s both;
 }
 .maputo-note {
+  animation: enter var(--dur) var(--ease-out);
   margin: 0;
   padding: 6px 10px;
   border: 2px solid var(--accent);
@@ -1231,6 +1330,7 @@ select {
 }
 
 /* Бросок: стакан трясётся как в виджете, потом кубики выпадают по одному */
+/* Высота сцены постоянна: стакан и выпавшие кубики занимают одно место, окно не меняет размер. */
 .roll-stage {
   min-height: 80px;
   display: flex;
@@ -1259,8 +1359,12 @@ select {
     transform: translate(4px, -7px) rotate(8deg);
   }
 }
+.roll-dice {
+  /* Все кубики в один ряд: перенос на второй ряд раздувал окно броска. */
+  max-width: none;
+}
 .roll-dice > span {
-  animation: die-drop 0.35s ease-out both;
+  animation: die-drop 0.35s var(--ease-out) both;
 }
 @keyframes die-drop {
   from {
@@ -1273,6 +1377,7 @@ select {
 
 /* Карточка-наставник: одна подсказка по текущей ситуации, над кнопками хода. */
 .coach {
+  animation: enter var(--dur) var(--ease-out);
   background: var(--surface);
   border-left: 4px solid var(--accent);
   border-radius: var(--radius);
@@ -1308,6 +1413,7 @@ select {
 }
 /* Подпись под кнопкой в режиме обучения: что она делает. */
 .hint {
+  animation: fade-in var(--dur) var(--ease-out);
   color: var(--muted);
   font-size: 0.8rem;
   text-align: center;
@@ -1331,7 +1437,15 @@ select {
 
 /* ─── «Кубик удачи»: правила, призы и модификаторы виджета ── */
 
+/* Пока грузится карточка приза, остальное скрыто и проявляется вместе с ней (см. LuckScreen). */
+.luck > :not(.screen-header) {
+  transition: opacity var(--dur) var(--ease-out);
+}
+.luck--waiting > :not(.screen-header) {
+  opacity: 0;
+}
 .luck-prize {
+  animation: enter var(--dur) var(--ease-out);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1418,4 +1532,39 @@ select {
   margin: 0;
   font-weight: 600;
   font-size: 0.9rem;
+}
+
+/*
+ * Меньше движения (системная настройка). Сдвиги, тряска, отскоки и мигание убираем,
+ * но проявление оставляем: оно не качает картинку, а показывает, что что-то изменилось.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --rise: 0px;
+  }
+  button:active:not(:disabled),
+  button.skin-card:active:not(:disabled),
+  button.pd-face:active:not(:disabled) {
+    transform: none;
+  }
+  .sheet {
+    animation-name: fade-in;
+    animation-duration: var(--dur);
+  }
+  .seat--turn .mat,
+  .outcome-icon,
+  .outcome--win::before,
+  .outcome--win::after,
+  .round-result--lose,
+  .round-result--gain,
+  .roll-cup--shake .cup {
+    animation: none;
+  }
+  .outcome--win::before,
+  .outcome--win::after {
+    opacity: 0;
+  }
+  .roll-dice > span {
+    animation-name: fade-in;
+  }
 }

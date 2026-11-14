@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
  */
 export function Sheet({ title, late, children }: { title: ReactNode; late?: boolean; children: ReactNode }) {
   return (
-    <div className="sheet-backdrop">
+    <div className={late ? 'sheet-backdrop sheet-backdrop--late' : 'sheet-backdrop'}>
       <section className={late ? 'sheet sheet--late' : 'sheet'} role="dialog" aria-modal="true">
         <h2 className="sheet-title">{title}</h2>
         {children}

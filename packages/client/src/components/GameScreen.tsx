@@ -39,6 +39,9 @@ export function GameScreen({ gameId, onBack }: { gameId: string; onBack: () => v
   const [askPassword, setAskPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const hasName = name.trim() !== '';
+  // Поле имени показываем, если имени не было при входе на экран, и не убираем, пока игрок печатает:
+  // раньше оно исчезало после первой же буквы, и вся форма под ним подпрыгивала вверх.
+  const [askName] = useState(!hasName);
 
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -86,7 +89,7 @@ export function GameScreen({ gameId, onBack }: { gameId: string; onBack: () => v
       </header>
       {t.games[gameId] && <p className="muted screen-lead">{t.games[gameId]!.hint}</p>}
 
-      {!hasName && <NameField />}
+      {askName && <NameField />}
 
       <section className="create-room">
         <label className="field">

@@ -111,12 +111,13 @@ export function RollModal({ room, view, myId }: { room: RoomView; view: PerudoVi
       <TimerBar msLeft={room.game?.msLeft ?? null} total={ROOM_TIMEOUTS.roll} label={t.flow.rollOrOut} />
 
       <div className="sheet-actions">
-        {hand && hand.count > 0 && !rolled && (
+        {/* Пока стакан трясётся, кнопка остаётся на месте (неактивной): окно не меняет высоту дважды. */}
+        {hand && hand.count > 0 && (!rolled || shaking) && (
           <button className="primary big" disabled={shaking} onClick={roll}>
             {t.flow.rollDice}
           </button>
         )}
-        {rolled && !shaking && <p className="muted center">{t.flow.waitRolls}</p>}
+        {rolled && !shaking && <p className="muted center sheet-wait">{t.flow.waitRolls}</p>}
       </div>
     </Sheet>
   );

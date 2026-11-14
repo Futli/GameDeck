@@ -25,7 +25,8 @@ export function LuckScreen({
   const telegramAppUrl = useClientState((s) => s.telegramAppUrl);
   // Кнопка «Открыть виджет в чате» — только когда бот его туда присылает (TELEGRAM_CHAT_WIDGET).
   const chatWidget = useClientState((s) => s.chatWidget);
-  const [prize, setPrize] = useState<{ skin: SkinView; ownerId: string } | null>(null);
+  // undefined — приз ещё грузится, null — приза нет (или не загрузился).
+  const [prize, setPrize] = useState<{ skin: SkinView; ownerId: string } | null | undefined>(skinId ? undefined : null);
   const [busy, setBusy] = useState(false);
   const chat = chatWidget ? luckChatLink(telegramAppUrl) : null;
 
@@ -49,10 +50,13 @@ export function LuckScreen({
     }
   };
 
-  const mine = prize !== null && profile !== null && prize.ownerId === profile.id;
+  const mine = prize != null && profile !== null && prize.ownerId === profile.id;
+  // Пока приз грузится, правила ниже не показываем: карточка приза встаёт над ними, и без этого
+  // весь текст прыгал бы вниз у игрока на глазах. Приходит ответ — всё проявляется разом.
+  const waiting = prize === undefined;
 
   return (
-    <main className="screen luck">
+    <main className={waiting ? 'screen luck luck--waiting' : 'screen luck'}>
       <header className="screen-header">
         <button className="ghost" onClick={onBack}>
           {t.luck.back}

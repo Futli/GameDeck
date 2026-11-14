@@ -10,7 +10,8 @@ export function TimerBar({ msLeft, total, label }: { msLeft: number | null; tota
   return (
     <div className={seconds <= 10 ? 'timer timer--low' : 'timer'}>
       <div className="timer-track">
-        <div className="timer-fill" style={{ width: `${Math.min(100, (left / total) * 100)}%` }} />
+        {/* Полоска сжимается через transform, а не width: так браузер не пересчитывает раскладку каждый тик. */}
+        <div className="timer-fill" style={{ transform: `scaleX(${Math.min(1, left / total)})` }} />
       </div>
       <span className="timer-text">
         {label && `${label} · `}

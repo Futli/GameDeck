@@ -37,13 +37,18 @@ export function RoomList({
     };
   }, []);
 
-  if (rooms === null) return null;
-  const list = rooms.filter((room) => room.gameId === gameId);
+  const list = rooms?.filter((room) => room.gameId === gameId) ?? [];
 
+  // Пока список не пришёл, место под него уже занято невидимой строкой «комнат нет»:
+  // иначе раздел появлялся через мгновение и сдвигал вниз вход по коду.
   return (
-    <section className="room-list" aria-label={t.rooms.aria}>
+    <section className="room-list" aria-label={t.rooms.aria} aria-busy={rooms === null}>
       <div className="divider">{t.rooms.title}</div>
-      {list.length === 0 && <p className="muted center">{t.rooms.empty}</p>}
+      {list.length === 0 && (
+        <p className="muted center room-list__empty" style={rooms === null ? { visibility: 'hidden' } : undefined}>
+          {t.rooms.empty}
+        </p>
+      )}
       {list.map((room) => (
         <RoomCard key={room.code} room={room} disabled={!canJoin} onJoin={() => onJoin(room.code)} />
       ))}
