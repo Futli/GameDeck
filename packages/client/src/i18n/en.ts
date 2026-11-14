@@ -43,6 +43,7 @@ export const en: Messages = {
     password: 'Password',
     join: 'Join',
     mySkins: 'My skins',
+    luck: '🎲 Lucky Dice',
     stats: 'Stats',
   },
 
@@ -54,6 +55,42 @@ export const en: Messages = {
     rating: (game) => `rating · ${game}`,
     wonLost: (won, lost) => `Won ${won}, lost ${lost}`,
     firstGame: 'Play your first game and your stats will show up here',
+  },
+
+  luck: {
+    title: 'Lucky Dice',
+    back: '← Back',
+    prize: 'Your prize',
+    prizeFrom:
+      'Won with a triple in Lucky Dice. It is a unique item with a serial number: put it on, gift it or sell it.',
+    equip: 'Put on',
+    equipped: 'Equipped ✓',
+    notYours: 'Another player owns this skin now',
+    toSkins: 'All my skins',
+    openChat: 'Open the widget in the bot chat',
+    lostWidget: 'Deleted the widget? Tap the button above or send /dice to the bot to get a new one.',
+    howTitle: 'How to play',
+    how: [
+      'The widget lives in the chat with the bot: roll three dice without opening the app.',
+      'You get a roll every 3 hours, up to three saved. When a friend you invited makes their first roll, you both get 3 more.',
+      'Coins are shared with the app: use them for table stakes and skins.',
+    ],
+    prizesTitle: 'Prizes',
+    prizes: [
+      ['All different', 'the sum of the dice in coins'],
+      ['Pair', 'sum ×2'],
+      ['Straight: three in a row', 'the sum and a re-roll'],
+      ['Triple 2-2-2, 3-3-3, 4-4-4', 'sum ×5 and a common skin'],
+      ['Triple 1-1-1, 5-5-5', 'sum ×5 and a rare skin'],
+      ['Three sixes', 'sum ×5 and an epic skin'],
+    ],
+    modifiersTitle: 'Modifiers',
+    rerollName: 'Re-roll',
+    rerollWhat: 'Changes one die of your last roll. You get it for a straight.',
+    rerollHow: ['Tap “Re-roll ×N” on the table.', 'Tap the die you want to re-roll: it lights up.', 'Tap “Re-roll”.'],
+    rerollRules:
+      'The prize can only grow: a better combination pays the difference, a worse one keeps your coins. ' +
+      'One re-roll per roll. Skins and new re-rolls come only from the first roll, so a triple after a re-roll pays coins but no skin.',
   },
 
   skins: {

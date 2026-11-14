@@ -48,7 +48,7 @@ export async function buildApp(options: AppOptions) {
   const skins = new SkinService(options.db);
   const rng = options.rng ?? cryptoRng;
   // Виджет и рефералка живут в одной таблице, поэтому сервис нужен и столу, даже когда бот выключен.
-  const widget = new WidgetService(options.db, players, rng, options.widgetRollIntervalSec);
+  const widget = new WidgetService(options.db, players, skins, rng, options.widgetRollIntervalSec);
   await shop.syncCatalog();
 
   // Socket.IO вешается на тот же http-сервер, что и Fastify: один порт для всего.

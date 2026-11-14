@@ -1,0 +1,1 @@
+ALTER TABLE "widget_players" ADD COLUMN "lang" text;

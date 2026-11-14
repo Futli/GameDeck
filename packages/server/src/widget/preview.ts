@@ -22,8 +22,9 @@ import { openDatabase } from '../db/client.js';
 import { widgetPlayers } from '../db/schema.js';
 import { PlayerService } from '../players/player-service.js';
 import { ShopService } from '../shop/shop-service.js';
+import { SkinService } from '../skins/skin-service.js';
 import { buildWidgetHtml, encodeWidgetState } from './build.js';
-import { feltMat, matFromSkin } from './mat.js';
+import { defaultCup, feltMat, matFromSkin } from './mat.js';
 import { WidgetService } from './widget-service.js';
 
 const port = Number(process.env.WIDGET_PREVIEW_PORT ?? 5180);
@@ -45,20 +46,22 @@ function previewMat() {
 const { db } = await openDatabase('memory://');
 await new ShopService(db).syncCatalog();
 const players = new PlayerService(db, config.startingCoins);
-const widget = new WidgetService(db, players, cryptoRng, intervalSec);
+// WIDGET_PREVIEW_DICE=4,4,4,6 — первые значения генератора: так можно сразу увидеть тройку и окно приза.
+// Значение — кубик 1–6; после тройки следующее значение выбирает вид скина (1–2 коврик, 3–4 кубики, 5–6 стакан).
+const scripted = (process.env.WIDGET_PREVIEW_DICE ?? '').split(',').filter(Boolean).map(Number);
+const rng = () => {
+  const next = scripted.shift();
+  return next === undefined ? cryptoRng() : (next - 0.5) / 6;
+};
+const widget = new WidgetService(db, players, new SkinService(db), rng, intervalSec);
 const { playerId } = await players.register();
 // WIDGET_PREVIEW_MODIFIERS=3 — выдать перебросы, чтобы не ждать стрита.
 const modifiers = Number(process.env.WIDGET_PREVIEW_MODIFIERS ?? 0);
 if (modifiers > 0) await db.insert(widgetPlayers).values({ playerId, rolls: 3, modifiers });
 
-const html = buildWidgetHtml(
-  { mat: previewMat(), dice: DEFAULT_DICE_STYLE, cup: 'red' },
-  {
-    invite: 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Fexample_bot',
-    ad: 'https://t.me/example_bot/play',
-    findGame: 'https://t.me/example_bot/play',
-  },
-);
+const html = buildWidgetHtml({ mat: previewMat(), dice: DEFAULT_DICE_STYLE, cup: defaultCup(PLAYER_COLOR_HEX.red) });
+// «Подробнее» в окне приза: в превью ссылка никуда не ведёт, но кнопку видно.
+const appUrl = 'https://t.me/example_bot/play';
 
 /** Подмена TelegramWidget: те же методы, что использует виджет, поверх fetch к этому серверу. */
 const STUB = String.raw`<script>
@@ -78,7 +81,7 @@ async function page(): Promise<string> {
   // Пузырь сообщения на телефоне шириной около 340 px — в нём и показываем.
   return (
     '<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">' +
-    '<body style="margin:12px;background:#8fa3b3"><div style="max-width:340px;border-radius:14px;overflow:hidden;background:#fff">' +
+    '<body style="margin:12px;background:#8fa3b3"><div style="max-width:340px;border-radius:14px;overflow:hidden;background:none">' +
     STUB.replace('__STATE__', () => state) +
     html +
     '</div>'
@@ -91,9 +94,10 @@ createServer((request, response) => {
     if (url.pathname === '/query') {
       const data = url.searchParams.get('d') ?? '';
       const reroll = /^m([0-2])$/.exec(data);
-      const answer = reroll
-        ? await widget.reroll(playerId, Number(reroll[1]), now())
+      const { details, ...answer } = reroll
+        ? { ...(await widget.reroll(playerId, Number(reroll[1]), now())), details: undefined }
         : await widget.roll(playerId, now());
+      if (details) Object.assign(answer, { l: `${appUrl}?startapp=${details}` });
       response.setHeader('content-type', 'application/json');
       response.end(
         JSON.stringify({

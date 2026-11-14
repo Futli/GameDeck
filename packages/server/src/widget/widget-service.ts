@@ -3,24 +3,29 @@ import {
   referralCodeSchema,
   rerollWidgetDie,
   rollWidgetDice,
+  SKIN_KINDS,
   spendWidgetRoll,
   WIDGET_MAX_STORED_ROLLS,
   WIDGET_ROLL_INTERVAL_SEC,
   type Rng,
   type WidgetDice,
   type WidgetRollBank,
-  type WidgetSkinRarity,
 } from '@gamedeck/shared';
-import { and, eq, gte, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { items, matchPlayers, playerItems, players, widgetPlayers } from '../db/schema.js';
+import { matchPlayers, players, widgetPlayers } from '../db/schema.js';
 import { changeCoins, type Tx } from '../db/wallet.js';
 import type { PlayerService } from '../players/player-service.js';
+import type { SkinService } from '../skins/skin-service.js';
 import type { WidgetRollAnswer, WidgetState } from './build.js';
 import { BOT_TEXTS, prizeText, type BotLang } from './texts.js';
 
-/** Какие предметы выпадают скином: только то, что видно на столе. */
-const SKIN_KINDS = ['mat', 'dice'];
+/**
+ * Ответ на бросок вместе с тем, куда ведёт «Подробнее» в окне приза: параметр startapp
+ * для Mini App («luck» — страница «Кубика удачи», «luck-<id скина>» — она же с выпавшим скином).
+ * Ссылку из него делает бот: адрес Mini App знает он, а не сервис бросков.
+ */
+export type WidgetRollResult = WidgetRollAnswer & { details?: string };
 
 /** Сколько бонусных бросков получают и друг, и пригласивший после первого броска друга. */
 export const REFERRAL_BONUS_ROLLS = 3;
@@ -42,6 +47,13 @@ type WidgetRow = typeof widgetPlayers.$inferSelect;
 const canReroll = (row: Pick<WidgetRow, 'modifiers' | 'lastDice' | 'lastRollModified'>) =>
   row.modifiers > 0 && row.lastDice !== null && !row.lastRollModified;
 
+/** Что сказать игроку, нажавшему «Переброс»: как им пользоваться или почему сейчас нельзя. */
+function rerollHint(row: Pick<WidgetRow, 'lastDice' | 'lastRollModified'>, lang: BotLang): string {
+  const hint = BOT_TEXTS[lang].rerollHint;
+  if (row.lastDice === null) return hint.noRoll;
+  return row.lastRollModified ? hint.used : hint.ready;
+}
+
 /**
  * Длинный код первых ссылок на бота: ref_ и id игрока без дефисов. Такие ссылки уже разосланы,
  * поэтому бот их по-прежнему понимает, а новые выдаёт с коротким кодом.
@@ -55,11 +67,12 @@ function playerIdFromLegacyCode(param: string): string | null {
 const playedMatch = (playerId: typeof widgetPlayers.playerId | string) =>
   sql`exists (select 1 from ${matchPlayers} where ${matchPlayers.playerId} = ${playerId})`;
 
-/** Чей виджет надо обновить: игрок и его последнее сообщение с виджетом. */
+/** Чей виджет надо обновить: игрок, его последнее сообщение с виджетом и язык этого виджета. */
 export interface WidgetMessage {
   playerId: string;
   chatId: number;
   messageId: number;
+  lang: BotLang;
 }
 
 /**
@@ -70,12 +83,13 @@ export class WidgetService {
   constructor(
     private readonly db: Db,
     private readonly players: PlayerService,
+    private readonly skins: SkinService,
     private readonly rng: Rng,
     readonly intervalSec: number = WIDGET_ROLL_INTERVAL_SEC,
   ) {}
 
-  /** Состояние для chat_data на момент now (unix, секунды). */
-  async state(playerId: string, now: number): Promise<WidgetState> {
+  /** Состояние для chat_data на момент now (unix, секунды). Подсказка к перебросу — на языке lang. */
+  async state(playerId: string, now: number, lang: BotLang = 'ru'): Promise<WidgetState> {
     const [row] = await this.db.select().from(widgetPlayers).where(eq(widgetPlayers.playerId, playerId));
     const bank = accrueWidgetRolls(this.bankOf(row), now, this.intervalSec);
     const me = await this.players.me(playerId);
@@ -85,12 +99,10 @@ export class WidgetService {
       n: bank.nextAt ?? 0,
       t: this.intervalSec,
       b: me?.coins ?? 0,
-      w: me?.wins ?? 0,
-      l: (me?.gamesPlayed ?? 0) - (me?.wins ?? 0),
-      c: me?.coinsWon ?? 0,
       a: row?.bonusRolls ?? 0,
       m: row?.modifiers ?? 0,
       u: row && canReroll(row) ? 1 : 0,
+      ...(row && row.modifiers > 0 ? { h: rerollHint(row, lang) } : {}),
       ...(dice ? { d: dice } : {}),
     };
   }
@@ -99,24 +111,34 @@ export class WidgetService {
    * Бросок по запросу виджета. Всё в одной транзакции со строкой игрока под замком:
    * два одновременных нажатия не потратят один и тот же бросок и не начислят монеты дважды.
    */
-  async roll(playerId: string, now: number, lang: BotLang = 'ru'): Promise<WidgetRollAnswer> {
+  async roll(playerId: string, now: number, lang: BotLang = 'ru'): Promise<WidgetRollResult> {
     return this.db.transaction(async (tx) => {
       const row = await this.lockRow(tx, playerId);
 
       // Сначала тратится бросок по таймеру (так раньше пойдёт отсчёт следующего), потом бонусные.
       const accrued = accrueWidgetRolls(this.bankOf(row), now, this.intervalSec);
       const spent = spendWidgetRoll(accrued, now, this.intervalSec);
-      if (!spent && row.bonusRolls < 1) return { e: 'NO_ROLLS' as const };
+      if (!spent && row.bonusRolls < 1) return { e: 'NO_ROLLS' as const, x: BOT_TEXTS[lang].noRolls };
       const bank = spent ?? accrued;
       const bonusRolls = spent ? row.bonusRolls : row.bonusRolls - 1;
 
       const roll = rollWidgetDice(this.rng);
       const coins = await changeCoins(tx, playerId, roll.coins, 'widget_roll', roll.dice.join(','));
-      const extra = roll.skin
-        ? await this.grantSkin(tx, playerId, roll.skin, lang)
-        : roll.modifier
-          ? BOT_TEXTS[lang].rerollWon
-          : null;
+      // Сверх монет: скин за тройку или переброс за стрит. О них виджет рассказывает в окне приза.
+      const t = BOT_TEXTS[lang];
+      let prize: { extra: string; popup: string; details: string } | null = null;
+      if (roll.skin) {
+        const kind = SKIN_KINDS[Math.floor(this.rng() * SKIN_KINDS.length)]!;
+        const skin = await this.skins.mint(playerId, kind, roll.skin, { source: 'reward', tx });
+        const rarity = t.rarity[roll.skin];
+        prize = {
+          extra: t.skinWon(rarity, skin.name),
+          popup: t.skinPopup(rarity, skin.name, skin.serial),
+          details: `luck-${skin.id}`,
+        };
+      } else if (roll.modifier) {
+        prize = { extra: t.rerollWon, popup: t.rerollPopup, details: 'luck' };
+      }
       const modifiers = row.modifiers + (roll.modifier ? 1 : 0);
 
       await tx
@@ -142,7 +164,8 @@ export class WidgetService {
         a: bonusRolls,
         m: modifiers,
         u: modifiers > 0 ? 1 : 0,
-        x: prizeText(lang, roll.outcome, roll.coins, extra),
+        x: prizeText(lang, roll.outcome, roll.coins, prize?.extra ?? null),
+        ...(prize ? { z: prize.popup, details: prize.details } : {}),
       };
     });
   }
@@ -189,12 +212,21 @@ export class WidgetService {
     });
   }
 
-  /** Запомнить сообщение с виджетом, чтобы потом обновлять его состояние. */
-  async rememberMessage(playerId: string, chatId: number, messageId: number): Promise<void> {
+  /** Последнее отправленное игроку сообщение с виджетом: бот удаляет его, когда присылает новый. */
+  async lastMessage(playerId: string): Promise<{ chatId: number; messageId: number } | null> {
+    const [row] = await this.db
+      .select({ chatId: widgetPlayers.chatId, messageId: widgetPlayers.messageId })
+      .from(widgetPlayers)
+      .where(eq(widgetPlayers.playerId, playerId));
+    return row?.chatId != null && row.messageId != null ? { chatId: row.chatId, messageId: row.messageId } : null;
+  }
+
+  /** Запомнить сообщение с виджетом и его язык, чтобы потом обновлять его состояние. */
+  async rememberMessage(playerId: string, chatId: number, messageId: number, lang: BotLang = 'ru'): Promise<void> {
     await this.db
       .insert(widgetPlayers)
-      .values({ playerId, rolls: WIDGET_MAX_STORED_ROLLS, chatId, messageId })
-      .onConflictDoUpdate({ target: widgetPlayers.playerId, set: { chatId, messageId } });
+      .values({ playerId, rolls: WIDGET_MAX_STORED_ROLLS, chatId, messageId, lang })
+      .onConflictDoUpdate({ target: widgetPlayers.playerId, set: { chatId, messageId, lang } });
   }
 
   /**
@@ -286,7 +318,12 @@ export class WidgetService {
         });
       const [referrer] = await tx.select().from(widgetPlayers).where(eq(widgetPlayers.playerId, referrerId));
       return referrer?.chatId != null && referrer.messageId != null
-        ? { playerId: referrerId, chatId: referrer.chatId, messageId: referrer.messageId }
+        ? {
+            playerId: referrerId,
+            chatId: referrer.chatId,
+            messageId: referrer.messageId,
+            lang: referrer.lang === 'en' ? 'en' : 'ru',
+          }
         : null;
     });
   }
@@ -301,31 +338,5 @@ export class WidgetService {
   private bankOf(row: { rolls: number; nextAt: Date | null } | undefined): WidgetRollBank {
     // Игрок, который ещё не бросал, начинает с полным запасом.
     return row ? { rolls: row.rolls, nextAt: toUnix(row.nextAt) } : { rolls: WIDGET_MAX_STORED_ROLLS, nextAt: null };
-  }
-
-  /**
-   * Выдать случайный предмет нужной редкости из тех, которых у игрока ещё нет.
-   * Возвращает фразу для виджета. Предмет остаётся в инвентаре, надеть его можно в Mini App.
-   */
-  private async grantSkin(tx: Tx, playerId: string, rarity: WidgetSkinRarity, lang: BotLang): Promise<string> {
-    const t = BOT_TEXTS[lang];
-    const owned = tx.select({ itemId: playerItems.itemId }).from(playerItems).where(eq(playerItems.playerId, playerId));
-    const candidates = await tx
-      .select({ id: items.id, name: items.name })
-      .from(items)
-      .where(
-        and(
-          eq(items.rarity, rarity),
-          eq(items.isActive, true),
-          inArray(items.kind, SKIN_KINDS),
-          notInArray(items.id, owned),
-        ),
-      )
-      .orderBy(items.id);
-    const item = candidates[Math.floor(this.rng() * candidates.length)];
-    if (!item) return t.allSkinsOwned(t.rarity[rarity]);
-
-    await tx.insert(playerItems).values({ playerId, itemId: item.id, source: 'reward' });
-    return t.skinWon(t.rarity[rarity], t.itemName(item.id, item.name));
   }
 }

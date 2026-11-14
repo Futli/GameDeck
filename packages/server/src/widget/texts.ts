@@ -18,33 +18,29 @@ export function botLang(languageCode: string | undefined): BotLang {
 export const WIDGET_UI = {
   ru: {
     roll: 'Бросить',
-    findGame: 'Найти игру',
-    rolls: 'Попытки',
-    balance: 'Баланс',
-    invite: 'Позвать друга',
-    ad: '+1 за рекламу',
-    noRolls: 'Попытки закончились',
+    rolls: 'Броски ',
+    reroll: 'Переброс ×',
+    rerollGo: 'Перебросить',
+    cancel: 'Отмена',
+    close: 'Закрыть',
+    more: 'Подробнее',
+    noRolls: 'Броски закончились',
     rateLimited: 'Слишком часто',
     timeout: 'Сервер не ответил',
     failed: 'Не получилось',
     hours: ' ч ',
     minutes: ' мин',
     seconds: ' с',
-    of3: ' из 3',
     nextIn: 'ещё через ',
-    coins: ' монет',
-    wins: ' побед · ',
-    losses: ' поражений · выиграно ',
-    reroll: 'Переброс: ',
-    pickDie: 'Выберите кубик',
   },
   en: {
     roll: 'Roll',
-    findGame: 'Find a game',
-    rolls: 'Rolls',
-    balance: 'Balance',
-    invite: 'Invite a friend',
-    ad: '+1 for an ad',
+    rolls: 'Rolls ',
+    reroll: 'Re-roll ×',
+    rerollGo: 'Re-roll',
+    cancel: 'Cancel',
+    close: 'Close',
+    more: 'Details',
     noRolls: 'No rolls left',
     rateLimited: 'Too often',
     timeout: 'No answer from the server',
@@ -52,49 +48,44 @@ export const WIDGET_UI = {
     hours: 'h ',
     minutes: 'm',
     seconds: 's',
-    of3: ' of 3',
     nextIn: 'next in ',
-    coins: ' coins',
-    wins: ' wins · ',
-    losses: ' losses · won ',
-    reroll: 'Re-roll: ',
-    pickDie: 'Pick a die',
   },
 } satisfies Record<BotLang, Record<string, string>>;
 
 export type WidgetUiKey = keyof (typeof WIDGET_UI)['ru'];
 
-/** Английские названия предметов каталога по id. В базе название хранится по-русски. */
-const ITEM_NAMES_EN: Partial<Record<string, string>> = {
-  'mat-felt': 'Green felt',
-  'mat-wood': 'Oak table',
-  'mat-neon': 'Neon',
-  'mat-dragon': 'Dragon’s lair',
-  'dice-classic': 'Classic',
-  'dice-bone': 'Bone',
-  'dice-casino': 'Casino',
-  'dice-night': 'Night',
-  'dice-gold': 'Gold',
-  'frame-silver': 'Silver frame',
-};
-
 /** Фразы бота и ответов виджета, которые составляет сервер. */
 export const BOT_TEXTS = {
   ru: {
-    caption: 'Кубик удачи: бросьте кубики и заберите монеты.',
+    caption: 'Кубик удачи: бросьте кубики и заберите монеты. Пропал виджет? Команда /dice пришлёт новый.',
+    /** Команда в меню бота: присылает виджет заново, если игрок удалил сообщение с ним. */
+    diceCommand: 'Кубик удачи: прислать виджет',
+    findGame: '🎲 Найти игру',
     outcome: { plain: '', pair: 'Пара, ×2! ', straight: 'Стрит! ', triple: 'Тройка, ×5! ' } as Record<
       WidgetRollOutcome,
       string
     >,
     coins: (n: number) => `+${n} монет`,
+    noRolls: 'Броски закончились, следующий придёт по таймеру',
     rerollWon: 'Выпал переброс',
     prizeUnchanged: 'Приз остался прежним',
     rarity: { common: 'обычный', rare: 'редкий', epic: 'эпический' } as Record<WidgetSkinRarity, string>,
-    allSkinsOwned: (rarity: string) => `Все скины редкости «${rarity}» уже ваши`,
     skinWon: (rarity: string, name: string) => `Выпал ${rarity} скин «${name}»`,
-    itemName: (_id: string, name: string) => name,
+    /** Окно приза в виджете: заголовок и описание через перевод строки. */
+    skinPopup: (rarity: string, name: string, serial: number) =>
+      `Новый ${rarity} скин!\n«${name}» № ${serial} уже в инвентаре. Посмотреть и надеть его можно в приложении.`,
+    rerollPopup:
+      'Выпал переброс!\nОн меняет один кубик последнего броска. Нажмите «Переброс» на столе, ' +
+      'выберите кубик и подтвердите. Если приз вырастет, получите разницу в монетах.',
+    /** Подсказка при нажатии «Переброс»: как им пользоваться или почему сейчас нельзя. */
+    rerollHint: {
+      ready:
+        'Нажмите на кубик, который хотите перебросить, и подтвердите. Вырастет приз — получите разницу, не вырастет — монеты останутся.',
+      noRoll: 'Переброс меняет один кубик последнего броска. Сначала бросьте кубики.',
+      used: 'К этому броску переброс уже применён: на один бросок — один переброс. Бросьте снова.',
+    },
     invite: {
-      button: 'Позвать друга',
+      button: '👋 Позвать друга',
       title: 'Позвать друга в «Кубик удачи»',
       description: 'Вам обоим по 3 броска после его первого броска',
       message: (link: string) =>
@@ -105,17 +96,29 @@ export const BOT_TEXTS = {
     },
   },
   en: {
-    caption: 'Lucky Dice: roll the dice and collect coins.',
+    caption: 'Lucky Dice: roll the dice and collect coins. Widget gone? Send /dice to get a new one.',
+    diceCommand: 'Lucky Dice: send the widget',
+    findGame: '🎲 Find a game',
     outcome: { plain: '', pair: 'Pair, ×2! ', straight: 'Straight! ', triple: 'Triple, ×5! ' },
     coins: (n: number) => `+${n} ${n === 1 ? 'coin' : 'coins'}`,
+    noRolls: 'No rolls left, the next one comes with the timer',
     rerollWon: 'You got a re-roll',
     prizeUnchanged: 'The prize stays the same',
     rarity: { common: 'common', rare: 'rare', epic: 'epic' },
-    allSkinsOwned: (rarity: string) => `You already own every ${rarity} skin`,
     skinWon: (rarity: string, name: string) => `You got a ${rarity} skin “${name}”`,
-    itemName: (id: string, name: string) => ITEM_NAMES_EN[id] ?? name,
+    skinPopup: (rarity: string, name: string, serial: number) =>
+      `New ${rarity} skin!\n“${name}” #${serial} is in your inventory. See it and put it on in the app.`,
+    rerollPopup:
+      'You got a re-roll!\nIt changes one die of your last roll. Tap “Re-roll” on the table, ' +
+      'pick a die and confirm. If the prize grows, you get the difference in coins.',
+    rerollHint: {
+      ready:
+        'Tap the die you want to re-roll and confirm. A bigger prize pays the difference, a smaller one keeps your coins.',
+      noRoll: 'A re-roll changes one die of your last roll. Roll the dice first.',
+      used: 'This roll was already re-rolled: one re-roll per roll. Roll again.',
+    },
     invite: {
-      button: 'Invite a friend',
+      button: '👋 Invite a friend',
       title: 'Invite a friend to Lucky Dice',
       description: 'You both get 3 rolls after their first roll',
       message: (link: string) =>

@@ -7,7 +7,7 @@ import {
   type Rng,
 } from '@gamedeck/shared';
 import { eq } from 'drizzle-orm';
-import { coinTransactions, playerItems, widgetPlayers } from '../src/db/schema.js';
+import { coinTransactions, widgetPlayers } from '../src/db/schema.js';
 import { PlayerService } from '../src/players/player-service.js';
 import { ShopService } from '../src/shop/shop-service.js';
 import { SkinService } from '../src/skins/skin-service.js';
@@ -35,8 +35,8 @@ async function setup(rng: Rng, intervalSec = 60) {
   const { db } = await testDatabase();
   await new ShopService(db).syncCatalog();
   const players = new PlayerService(db, 500);
-  const widget = new WidgetService(db, players, rng, intervalSec);
   const skins = new SkinService(db);
+  const widget = new WidgetService(db, players, skins, rng, intervalSec);
   const user = { id: nextTelegramId++, first_name: 'Лёха' };
   return { db, players, skins, widget, user, playerId: await players.ensureTelegramPlayer(user) };
 }
@@ -67,7 +67,10 @@ describe('бросок в виджете с настоящим профилем'
     const { widget, playerId } = await setup(diceRng(1, 3, 5));
     for (let i = 0; i < WIDGET_MAX_STORED_ROLLS; i++) await widget.roll(playerId, 1000);
 
-    expect(await widget.roll(playerId, 1059)).toEqual({ e: 'NO_ROLLS' });
+    expect(await widget.roll(playerId, 1059)).toEqual({
+      e: 'NO_ROLLS',
+      x: 'Броски закончились, следующий придёт по таймеру',
+    });
     expect(await widget.state(playerId, 1059)).toMatchObject({ r: 0, b: 527 });
     expect(await widget.roll(playerId, 1060)).toMatchObject({ r: 0, n: 1120, b: 536 });
   });
@@ -82,25 +85,24 @@ describe('бросок в виджете с настоящим профилем'
     expect((await widget.state(playerId, 1000)).b).toBe(527);
   });
 
-  it('тройка кладёт скин нужной редкости в инвентарь, пока такие есть', async () => {
-    // Эпических скинов в каталоге два: после них тройка шестёрок даёт только монеты.
-    const { db, widget, playerId } = await setup(diceRng(6, 6, 6));
-    const owned = () => db.select().from(playerItems).where(eq(playerItems.playerId, playerId));
+  it('тройка выпускает игроку новый скин нужной редкости и показывает его в окне приза', async () => {
+    // Шестой кубик после трёх шестёрок выбирает вид скина: 6 — стакан.
+    const { skins, widget, playerId } = await setup(diceRng(6, 6, 6));
 
-    expect(await widget.roll(playerId, 1000)).toMatchObject({
+    const answer = await widget.roll(playerId, 1000);
+    const [skin] = await skins.list(playerId);
+    expect(skin).toMatchObject({ kind: 'cup', rarity: 'epic', serial: expect.any(Number) });
+    expect(answer).toMatchObject({
       o: 'triple',
       c: 90,
-      x: 'Тройка, ×5! +90 монет. Выпал эпический скин «Ночь»',
+      x: `Тройка, ×5! +90 монет. Выпал эпический скин «${skin!.name}»`,
+      z: `Новый эпический скин!\n«${skin!.name}» № ${skin!.serial} уже в инвентаре. Посмотреть и надеть его можно в приложении.`,
+      details: `luck-${skin!.id}`,
     });
-    expect(await widget.roll(playerId, 1000)).toMatchObject({
-      x: 'Тройка, ×5! +90 монет. Выпал эпический скин «Золото»',
-    });
-    expect(await widget.roll(playerId, 1000)).toMatchObject({
-      x: 'Тройка, ×5! +90 монет. Все скины редкости «эпический» уже ваши',
-    });
-    expect((await owned()).filter((row) => row.source === 'reward').map((row) => row.itemId)).toEqual(
-      expect.arrayContaining(['dice-night', 'dice-gold']),
-    );
+
+    // Каждая тройка — новый уникальный скин, а не «всё уже есть».
+    await widget.roll(playerId, 1000);
+    expect(await skins.list(playerId)).toHaveLength(2);
   });
 
   it('стрит копит перебросы', async () => {
@@ -111,9 +113,24 @@ describe('бросок в виджете с настоящим профилем'
       m: 1,
       u: 1,
       x: 'Стрит! +12 монет. Выпал переброс',
+      z: expect.stringMatching(/^Выпал переброс!\nОн меняет один кубик последнего броска/),
+      details: 'luck',
     });
     await widget.roll(playerId, 1000);
     expect(await widget.state(playerId, 1000)).toMatchObject({ m: 2, u: 1 });
+  });
+
+  it('объясняет переброс в состоянии: как им пользоваться или почему сейчас нельзя', async () => {
+    const { db, widget, playerId } = await setup(diceRng(2, 3, 6, 2));
+    expect(await widget.state(playerId, 1000)).not.toHaveProperty('h');
+
+    await db.insert(widgetPlayers).values({ playerId, rolls: WIDGET_MAX_STORED_ROLLS, modifiers: 2 });
+    expect((await widget.state(playerId, 1000)).h).toMatch(/Сначала бросьте кубики/);
+    await widget.roll(playerId, 1000);
+    expect((await widget.state(playerId, 1000)).h).toMatch(/^Нажмите на кубик/);
+    await widget.reroll(playerId, 2, 1000);
+    expect((await widget.state(playerId, 1000)).h).toMatch(/уже применён/);
+    expect((await widget.state(playerId, 1000, 'en')).h).toMatch(/already re-rolled/);
   });
 });
 
@@ -194,8 +211,7 @@ describe('переброс кубика', () => {
       c: 62,
       x: 'Тройка, ×5! +62 монет',
     });
-    const owned = await triple.db.select().from(playerItems).where(eq(playerItems.playerId, triple.playerId));
-    expect(owned.filter((row) => row.source === 'reward')).toHaveLength(0);
+    expect(await triple.skins.list(triple.playerId)).toHaveLength(0);
 
     // 3-4-1 (8 монет), третий кубик перебрасывается в 5: стрит 3-4-5, 12 монет.
     const straight = await setupWithRerolls(diceRng(3, 4, 1, 5), 1);
@@ -222,7 +238,7 @@ describe('приглашение друга', () => {
     expect((await widget.state(playerId, 1000)).a).toBe(0);
 
     await widget.roll(friendId, 1000);
-    expect(await widget.claimReferral(friendId, 1000)).toEqual({ playerId, chatId: 5, messageId: 42 });
+    expect(await widget.claimReferral(friendId, 1000)).toEqual({ playerId, chatId: 5, messageId: 42, lang: 'ru' });
     expect((await widget.state(friendId, 1000)).a).toBe(REFERRAL_BONUS_ROLLS);
     expect((await widget.state(playerId, 1000)).a).toBe(REFERRAL_BONUS_ROLLS);
 
@@ -238,7 +254,7 @@ describe('приглашение друга', () => {
 
     expect(await widget.roll(playerId, 1000)).toMatchObject({ r: 0, a: 1 });
     expect(await widget.roll(playerId, 1000)).toMatchObject({ r: 0, a: 0, n: 2000 });
-    expect(await widget.roll(playerId, 1000)).toEqual({ e: 'NO_ROLLS' });
+    expect(await widget.roll(playerId, 1000)).toMatchObject({ e: 'NO_ROLLS' });
   });
 
   it('не засчитывает себя, битую ссылку, второго пригласившего и того, кто уже бросал', async () => {
@@ -359,9 +375,17 @@ describe('бот с виджетом', () => {
     expect(sent.method).toBe('sendWidget');
     expect(sent.params).toMatchObject({ chat_id: 5, allow_queries: true });
     expect(measureWidget(sent.params.html as string).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
-    expect(sent.params.html).toContain('https://t.me/example_bot/play');
+    // «Найти игру» и «Позвать друга» — кнопки Telegram под столом; без inline-режима приглашение — «Поделиться».
     const referral = `https://t.me/example_bot?start=${await startOf(players, playerId)}`;
-    expect(sent.params.html).toContain(`https://t.me/share/url?url=${encodeURIComponent(referral)}`);
+    expect(sent.params.reply_markup).toEqual({
+      inline_keyboard: [
+        [
+          { text: '🎲 Найти игру', url: 'https://t.me/example_bot/play' },
+          { text: '👋 Позвать друга', url: `https://t.me/share/url?url=${encodeURIComponent(referral)}` },
+        ],
+      ],
+    });
+    expect(sent.params.html).not.toContain('https://');
     expect(JSON.parse(sent.params.chat_data as string)).toMatchObject({ r: 3, b: 500 } satisfies Partial<WidgetState>);
     const [row] = await db.select().from(widgetPlayers).where(eq(widgetPlayers.playerId, playerId));
     expect(row).toMatchObject({ chatId: 5, messageId: 42 });
@@ -372,7 +396,15 @@ describe('бот с виджетом', () => {
     });
     const [answer, edit] = calls.slice(2);
     expect(answer).toMatchObject({ method: 'answerWidgetQuery', params: { widget_query_id: 'q1' } });
-    expect(JSON.parse(answer!.params.data as string)).toMatchObject({ d: [4, 4, 4], c: 60, b: 560 });
+    // Тройка — скин: «Подробнее» в окне приза ведёт в Mini App на страницу с этим скином.
+    const [skin] = await skins.list(playerId);
+    expect(JSON.parse(answer!.params.data as string)).toMatchObject({
+      d: [4, 4, 4],
+      c: 60,
+      b: 560,
+      l: `https://t.me/example_bot/play?startapp=luck-${skin!.id}`,
+    });
+    expect(answer!.params.data).not.toContain('details');
     expect(edit).toMatchObject({ method: 'editMessageWidgetData', params: { chat_id: 5, message_id: 42 } });
     expect(JSON.parse(edit!.params.chat_data as string)).toMatchObject({ r: 2, b: 560, d: [4, 4, 4] });
   });
@@ -396,15 +428,14 @@ describe('бот с виджетом', () => {
     const bot = new WidgetBot({ api, players, skins, widget, appUrl: null, log, now: () => 1000 });
     const referral = `https://t.me/example_bot?start=${await startOf(players, playerId)}`;
 
-    // Кнопка уходит из виджета под него: внутри виджета есть только «Поделиться» с голым адресом.
+    // Кнопка под виджетом открывает выбор чата, а не «Поделиться» с голым адресом.
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: user } });
     const sent = calls.find((call) => call.method === 'sendWidget')!;
-    expect(sent.params.html).not.toContain('share/url');
     expect(sent.params.reply_markup).toEqual({
       inline_keyboard: [
         [
           {
-            text: 'Позвать друга',
+            text: '👋 Позвать друга',
             switch_inline_query_chosen_chat: { query: '', allow_user_chats: true, allow_group_chats: true },
           },
         ],
@@ -476,14 +507,36 @@ describe('бот с виджетом', () => {
 
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: english } });
     const sent = calls.find((c) => c.method === 'sendWidget')!;
-    expect(sent.params.caption).toBe('Lucky Dice: roll the dice and collect coins.');
+    expect(sent.params.caption).toBe(
+      'Lucky Dice: roll the dice and collect coins. Widget gone? Send /dice to get a new one.',
+    );
     expect(sent.params.html).not.toMatch(/[А-Яа-яЁё]/);
 
     await bot.handleUpdate({ update_id: 2, widget_query: { id: 'q1', from: english, data: 'r' } });
     const answer = calls.find((c) => c.method === 'answerWidgetQuery')!;
     expect(JSON.parse(answer.params.data as string)).toMatchObject({
-      x: 'Triple, ×5! +60 coins. You got a common skin “Oak table”',
+      x: expect.stringMatching(/^Triple, ×5! \+60 coins\. You got a common skin “.+”$/),
+      z: expect.stringMatching(/^New common skin!\n“.+” #\d+ is in your inventory/),
     });
+  });
+
+  it('по /dice присылает виджет заново и удаляет прежний', async () => {
+    const { players, skins, widget, user } = await setup(diceRng(1, 2, 4));
+    const { api, calls } = fakeApi();
+    let messageId = 40;
+    const counting: BotApi = {
+      call: async <T>(method: string, params: Record<string, unknown>) =>
+        method === 'sendWidget' ? ({ message_id: ++messageId } as T) : api.call<T>(method, params),
+    };
+    const bot = new WidgetBot({ api: counting, players, skins, widget, appUrl: null, log, now: () => 1000 });
+
+    await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: user, text: '/start' } });
+    expect(calls.filter((call) => call.method === 'deleteMessage')).toHaveLength(0);
+
+    await bot.handleUpdate({ update_id: 2, message: { chat: { id: 5, type: 'private' }, from: user, text: '/dice' } });
+    expect(calls.filter((call) => call.method === 'deleteMessage')).toEqual([
+      { method: 'deleteMessage', params: { chat_id: 5, message_id: 41 } },
+    ]);
   });
 
   it('не отвечает в группах и отвечает ошибкой на незнакомый запрос', async () => {

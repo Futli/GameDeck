@@ -7,7 +7,7 @@
  * отлично сжимается zlib (в пиксель-арте много повторов), а виджет рисует её
  * на canvas прямоугольниками — по одному на отрезок одинаковых пикселей в строке.
  */
-import { resolvePalette, type PixelImage } from '@gamedeck/shared';
+import { CUP_HEIGHT, CUP_WIDTH, resolvePalette, type PixelImage } from '@gamedeck/shared';
 
 export const MAT_WIDTH = 128;
 export const MAT_HEIGHT = 96;
@@ -140,5 +140,51 @@ export function matFromSkin(image: PixelImage, playerColor: string): MatSkin {
     // Пустой цвет у коврика не встречается (он без прозрачности), но палитра должна быть валидной.
     palette: resolvePalette(image, playerColor).map((color) => color || '#000000'),
     pixels: Array.from(image.pixels, (color) => color.toString(16)).join(''),
+  };
+}
+
+/**
+ * Стакан в виджете — картинка 16×18 в том же формате, что и коврик: палитра и номер цвета
+ * на пиксель. Прозрачный цвет — #0000: прямоугольник такого цвета на canvas ничего не рисует.
+ */
+export type CupSprite = MatSkin;
+
+const TRANSPARENT = '#0000';
+
+/** Сгенерированный стакан (скин игрока) в формат виджета с цветом игрока. */
+export function cupFromSkin(image: PixelImage, playerColor: string): CupSprite {
+  return {
+    palette: resolvePalette(image, playerColor).map((color) => color || TRANSPARENT),
+    pixels: Array.from(image.pixels, (color) => color.toString(16)).join(''),
+  };
+}
+
+/**
+ * Стандартный стакан цвета игрока, когда скин стакана не надет. Прямоугольники те же, что
+ * рисовал прежний виджет: обводка, тело, блик, тень (номера цветов 4, 2, 1, 3; 0 — прозрачный).
+ */
+export function defaultCup(colors: { light: string; main: string; shade: string }): CupSprite {
+  const cells = new Array<number>(CUP_WIDTH * CUP_HEIGHT).fill(0);
+  const rects: Array<[number, number, number, number, number]> = [
+    [4, 4, 0, 8, 1],
+    [4, 3, 1, 10, 4],
+    [4, 2, 5, 12, 8],
+    [4, 1, 13, 14, 5],
+    [2, 4, 1, 8, 4],
+    [2, 3, 5, 10, 8],
+    [2, 2, 13, 12, 4],
+    [1, 4, 1, 2, 4],
+    [1, 3, 5, 2, 8],
+    [1, 2, 13, 2, 3],
+    [3, 11, 2, 1, 3],
+    [3, 12, 5, 1, 8],
+    [3, 13, 13, 1, 4],
+    [3, 2, 15, 12, 1],
+  ];
+  for (const [color, x0, y0, w, h] of rects)
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) cells[y * CUP_WIDTH + x] = color;
+  return {
+    palette: [TRANSPARENT, colors.light, colors.main, colors.shade, 'rgba(0,0,0,.67)'],
+    pixels: cells.map((color) => color.toString(16)).join(''),
   };
 }

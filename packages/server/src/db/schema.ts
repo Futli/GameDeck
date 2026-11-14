@@ -265,6 +265,11 @@ export const widgetPlayers = pgTable('widget_players', {
   /** Последнее сообщение с виджетом: по нему бот обновляет состояние через editMessageWidgetData. */
   chatId: bigint('chat_id', { mode: 'number' }),
   messageId: integer('message_id'),
+  /**
+   * Язык последнего виджета (ru/en). Бот обновляет состояние и без нажатия игрока (награда за друга),
+   * а подсказки в состоянии пишутся на языке виджета.
+   */
+  lang: text('lang'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

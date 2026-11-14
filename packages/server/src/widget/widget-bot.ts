@@ -4,8 +4,8 @@ import { PLAYER_COLOR_HEX, generateSkin, referralStartParam } from '@gamedeck/sh
 import type { PlayerService } from '../players/player-service.js';
 import type { SkinService } from '../skins/skin-service.js';
 import { BotApiError, type BotApi } from './bot-api.js';
-import { buildWidgetHtml, encodeWidgetState, type WidgetRollAnswer } from './build.js';
-import { feltMat, matFromSkin } from './mat.js';
+import { buildWidgetHtml, encodeWidgetState, isWidgetLink, type WidgetRollAnswer } from './build.js';
+import { cupFromSkin, defaultCup, feltMat, matFromSkin } from './mat.js';
 import { botLang, BOT_TEXTS } from './texts.js';
 import type { WidgetMessage, WidgetService } from './widget-service.js';
 
@@ -48,7 +48,7 @@ interface WidgetBotOptions {
   players: PlayerService;
   skins: SkinService;
   widget: WidgetService;
-  /** Ссылка на Mini App для кнопки «Найти игру»; null — кнопки нет. */
+  /** Ссылка на Mini App для кнопки «Найти игру» и «Подробнее» в окне приза; null — их нет. */
   appUrl: string | null;
   log: Pick<FastifyBaseLogger, 'info' | 'warn' | 'error'>;
   now?: () => number;
@@ -107,7 +107,10 @@ export class WidgetBot {
     let retryMs = RETRY_MIN_MS;
     while (this.running) {
       try {
-        if (this.info === null) log.info({ bot: (await this.botInfo()).url }, 'widget bot started');
+        if (this.info === null) {
+          log.info({ bot: (await this.botInfo()).url }, 'widget bot started');
+          await this.setCommands();
+        }
         // timeout 5 секунд, а не 25: при остановке сервера не приходится долго ждать ответа.
         const updates = await api.call<unknown[]>('getUpdates', { offset, timeout: 5 }, 15_000);
         retryMs = RETRY_MIN_MS;
@@ -144,6 +147,22 @@ export class WidgetBot {
     }
   }
 
+  /**
+   * Команда /dice в меню бота: присылает виджет заново, если игрок удалил сообщение с ним.
+   * Виджет приходит в ответ на любое сообщение, но об этом нужно догадаться, а команду видно в меню.
+   * Не получилось — не беда: бот работает и без меню.
+   */
+  private async setCommands(): Promise<void> {
+    for (const lang of ['en', 'ru'] as const) {
+      await this.options.api
+        .call('setMyCommands', {
+          commands: [{ command: 'dice', description: BOT_TEXTS[lang].diceCommand }],
+          ...(lang === 'ru' ? { language_code: 'ru' } : {}),
+        })
+        .catch((error: unknown) => this.options.log.warn({ err: error }, 'widget bot: commands were not set'));
+    }
+  }
+
   private async botInfo(): Promise<BotInfo> {
     const now = this.now();
     if (this.info === null || now - this.info.checkedAt >= BOT_INFO_TTL_SEC) {
@@ -165,7 +184,11 @@ export class WidgetBot {
     if (update.inline_query) await this.onInlineQuery(update.inline_query);
   }
 
-  /** Любое сообщение в личке — прислать виджет с текущим состоянием игрока. */
+  /**
+   * Любое сообщение в личке — прислать виджет с текущим состоянием игрока. Так игрок возвращает
+   * удалённый виджет: командой /dice из меню, /start или просто сообщением. Прежний виджет бот
+   * удаляет, чтобы в чате был один живой стол, а не стопка устаревших.
+   */
   private async onMessage(message: NonNullable<Update['message']>): Promise<void> {
     const { api, players, skins, widget, appUrl } = this.options;
     if (message.chat.type !== 'private' || !message.from) return;
@@ -182,52 +205,54 @@ export class WidgetBot {
     // игрок получит виджет с сукном, а не ошибку.
     const equipped = await skins.equipped(playerId);
     const dice = await players.diceStyle(playerId);
-    // «Позвать друга». Ссылку за текстом умеет только inline-режим: кнопка под виджетом открывает выбор
-    // чата, и бот подставляет готовое сообщение (onInlineQuery). Из самого виджета так нельзя: у него есть
-    // только openTelegramLink, а «Поделиться» (t.me/share/url) шлёт голый адрес. Поэтому кнопка внутри
-    // виджета остаётся запасной, пока inline-режим в BotFather не включён. Реклама ещё не сделана, её кнопка скрыта.
-    const { inline } = await this.botInfo();
-    const links = {
-      invite: inline ? null : `https://t.me/share/url?url=${encodeURIComponent(await this.referralLink(playerId))}`,
-      ad: null,
-      findGame: appUrl,
-    };
+    const red = PLAYER_COLOR_HEX.red;
+    const cup = equipped.cup ? cupFromSkin(generateSkin(equipped.cup).render(), red.main) : defaultCup(red);
     let html: string;
     try {
-      const mat = equipped.mat
-        ? matFromSkin(generateSkin(equipped.mat).render(), PLAYER_COLOR_HEX.red.main)
-        : feltMat();
-      html = buildWidgetHtml({ mat, dice, cup: 'red' }, links, lang);
+      const mat = equipped.mat ? matFromSkin(generateSkin(equipped.mat).render(), red.main) : feltMat();
+      html = buildWidgetHtml({ mat, dice, cup }, lang);
     } catch (error) {
       this.options.log.warn(
         { err: error, skin: equipped.mat },
         'skin mat does not fit the widget, falling back to felt',
       );
-      html = buildWidgetHtml({ mat: feltMat(), dice, cup: 'red' }, links, lang);
+      html = buildWidgetHtml({ mat: feltMat(), dice, cup }, lang);
     }
+
+    // Под столом — кнопки Telegram: «Найти игру» открывает Mini App, «Позвать друга» делится личной ссылкой.
+    // Ссылку за текстом умеет только inline-режим: кнопка открывает выбор чата, и бот подставляет готовое
+    // сообщение (onInlineQuery). Без inline-режима (BotFather → /setinline) кнопка открывает «Поделиться»
+    // с голым адресом. В HTML виджета этих кнопок нет: им не нужен стол, а байты лимита нужны столу.
+    const { inline } = await this.botInfo();
+    const t = BOT_TEXTS[lang];
+    const invite = inline
+      ? {
+          text: t.invite.button,
+          switch_inline_query_chosen_chat: { query: '', allow_user_chats: true, allow_group_chats: true },
+        }
+      : {
+          text: t.invite.button,
+          url: `https://t.me/share/url?url=${encodeURIComponent(await this.referralLink(playerId))}`,
+        };
+    const buttons = [...(appUrl ? [{ text: t.findGame, url: appUrl }] : []), invite];
+
+    const previous = await widget.lastMessage(playerId);
     const sent = await api.call<{ message_id: number }>('sendWidget', {
       chat_id: message.chat.id,
       html,
-      // Подпись видна в списке чатов и в приложениях без поддержки виджетов.
-      caption: BOT_TEXTS[lang].caption,
+      // Подпись видна под виджетом, в списке чатов и в приложениях без поддержки виджетов.
+      caption: t.caption,
       allow_queries: true,
-      chat_data: encodeWidgetState(await widget.state(playerId, this.now())),
-      ...(inline
-        ? {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: BOT_TEXTS[lang].invite.button,
-                    switch_inline_query_chosen_chat: { query: '', allow_user_chats: true, allow_group_chats: true },
-                  },
-                ],
-              ],
-            },
-          }
-        : {}),
+      chat_data: encodeWidgetState(await widget.state(playerId, this.now(), lang)),
+      reply_markup: { inline_keyboard: [buttons] },
     });
-    await widget.rememberMessage(playerId, message.chat.id, sent.message_id);
+    await widget.rememberMessage(playerId, message.chat.id, sent.message_id, lang);
+    // Бот может удалить своё сообщение в личке в течение 48 часов; старше — останется, это не ошибка.
+    if (previous && previous.chatId === message.chat.id) {
+      await api
+        .call('deleteMessage', { chat_id: previous.chatId, message_id: previous.messageId })
+        .catch(() => undefined);
+    }
   }
 
   /**
@@ -270,8 +295,12 @@ export class WidgetBot {
     try {
       // «r» — бросок, «m0»–«m2» — переброс кубика с этим номером.
       const reroll = /^m([0-2])$/.exec(query.data);
-      if (query.data === 'r') answer = await widget.roll(playerId, this.now(), lang);
-      else if (reroll) answer = await widget.reroll(playerId, Number(reroll[1]), this.now(), lang);
+      if (query.data === 'r') {
+        // «Подробнее» в окне приза ведёт в Mini App: сервис говорит куда, ссылку собирает бот.
+        const { details, ...rolled } = await widget.roll(playerId, this.now(), lang);
+        const link = details && this.options.appUrl ? `${this.options.appUrl}?startapp=${details}` : null;
+        answer = link && isWidgetLink(link) ? { ...rolled, l: link } : rolled;
+      } else if (reroll) answer = await widget.reroll(playerId, Number(reroll[1]), this.now(), lang);
     } finally {
       await api.call('answerWidgetQuery', { widget_query_id: query.id, data: JSON.stringify(answer) });
     }
@@ -288,7 +317,7 @@ export class WidgetBot {
         .call('editMessageWidgetData', {
           chat_id: query.chat.id,
           message_id: query.message_id,
-          chat_data: encodeWidgetState(await widget.state(playerId, this.now())),
+          chat_data: encodeWidgetState(await widget.state(playerId, this.now(), lang)),
         })
         .catch((error: unknown) => {
           // Отказ в броске состояние не меняет, и Telegram отвечает «message is not modified».
@@ -307,7 +336,7 @@ export class WidgetBot {
       .call('editMessageWidgetData', {
         chat_id: referrer.chatId,
         message_id: referrer.messageId,
-        chat_data: encodeWidgetState(await this.options.widget.state(referrer.playerId, this.now())),
+        chat_data: encodeWidgetState(await this.options.widget.state(referrer.playerId, this.now(), referrer.lang)),
       })
       .catch((error: unknown) => {
         // Награда уже в базе; не обновился старый виджет — игрок увидит её в следующем.
