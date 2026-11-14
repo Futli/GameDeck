@@ -1,13 +1,13 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
-import { PLAYER_COLOR_HEX, generateSkin } from '@gamedeck/shared';
+import { PLAYER_COLOR_HEX, generateSkin, referralStartParam } from '@gamedeck/shared';
 import type { PlayerService } from '../players/player-service.js';
 import type { SkinService } from '../skins/skin-service.js';
 import { BotApiError, type BotApi } from './bot-api.js';
 import { buildWidgetHtml, encodeWidgetState, type WidgetRollAnswer } from './build.js';
 import { feltMat, matFromSkin } from './mat.js';
 import { botLang, BOT_TEXTS } from './texts.js';
-import { referralCode, type WidgetService } from './widget-service.js';
+import type { WidgetMessage, WidgetService } from './widget-service.js';
 
 const userSchema = z.object({
   id: z.number().int().positive(),
@@ -155,7 +155,7 @@ export class WidgetBot {
 
   /** Личная ссылка игрока: по ней бот узнаёт, кто пригласил друга. */
   private async referralLink(playerId: string): Promise<string> {
-    return `${(await this.botInfo()).url}?start=${referralCode(playerId)}`;
+    return `${(await this.botInfo()).url}?start=${referralStartParam(await this.options.players.referralCode(playerId))}`;
   }
 
   /** Обработать одно обновление. Открыт для тестов: они подают обновления без сети. */
@@ -279,18 +279,7 @@ export class WidgetBot {
     // Первый бросок приглашённого приносит бонусные броски ему и пригласившему.
     // Пригласивший не нажимал ничего, поэтому его виджет обновляется через chat_data.
     const referrer = query.data === 'r' && !('e' in answer) ? await widget.claimReferral(playerId, this.now()) : null;
-    if (referrer) {
-      await api
-        .call('editMessageWidgetData', {
-          chat_id: referrer.chatId,
-          message_id: referrer.messageId,
-          chat_data: encodeWidgetState(await widget.state(referrer.playerId, this.now())),
-        })
-        .catch((error: unknown) => {
-          // Награда уже в базе; не обновился старый виджет — игрок увидит её в следующем.
-          this.options.log.warn({ err: error }, 'widget bot: referrer widget was not refreshed');
-        });
-    }
+    if (referrer) await this.refreshReferrerWidget(referrer);
 
     // Ответ видит только нажавший виджет и только сейчас. Чтобы состояние пережило
     // перезапуск приложения, оно кладётся в chat_data сообщения.
@@ -306,5 +295,23 @@ export class WidgetBot {
           if (!(error instanceof BotApiError && error.description.includes('not modified'))) throw error;
         });
     }
+  }
+
+  /**
+   * Показать пригласившему награду за друга. Он ничего не нажимал, поэтому бот сам обновляет
+   * его последний виджет через chat_data. Зовётся и после броска друга в виджете, и после
+   * первой партии друга за столом.
+   */
+  async refreshReferrerWidget(referrer: WidgetMessage): Promise<void> {
+    await this.options.api
+      .call('editMessageWidgetData', {
+        chat_id: referrer.chatId,
+        message_id: referrer.messageId,
+        chat_data: encodeWidgetState(await this.options.widget.state(referrer.playerId, this.now())),
+      })
+      .catch((error: unknown) => {
+        // Награда уже в базе; не обновился старый виджет — игрок увидит её в следующем.
+        this.options.log.warn({ err: error }, 'widget bot: referrer widget was not refreshed');
+      });
   }
 }

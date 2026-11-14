@@ -204,7 +204,13 @@ export class PlayerService {
    */
   async me(playerId: string): Promise<MyProfile | null> {
     const [player] = await this.db
-      .select({ id: players.id, displayName: players.displayName, avatarUrl: players.avatarUrl, coins: players.coins })
+      .select({
+        id: players.id,
+        displayName: players.displayName,
+        avatarUrl: players.avatarUrl,
+        coins: players.coins,
+        referralCode: players.referralCode,
+      })
       .from(players)
       .where(eq(players.id, playerId));
     if (!player) return null;
@@ -243,6 +249,19 @@ export class PlayerService {
         gamesPlayed,
       })),
     };
+  }
+
+  /** Реферальный код игрока для ссылок-приглашений. */
+  async referralCode(playerId: string): Promise<string> {
+    const [row] = await this.db.select({ code: players.referralCode }).from(players).where(eq(players.id, playerId));
+    if (!row) throw new Error(`player ${playerId} not found`);
+    return row.code;
+  }
+
+  /** Кто владеет реферальным кодом; null — такого кода нет. */
+  async playerIdByReferralCode(code: string): Promise<string | null> {
+    const [row] = await this.db.select({ id: players.id }).from(players).where(eq(players.referralCode, code));
+    return row?.id ?? null;
   }
 
   /** Аватар из Telegram, если игрок входил через Mini App. */

@@ -1,20 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER_COLOR_HEX, WIDGET_MAX_STORED_ROLLS, generateSkin, type Rng } from '@gamedeck/shared';
+import {
+  PLAYER_COLOR_HEX,
+  WIDGET_MAX_STORED_ROLLS,
+  generateSkin,
+  referralStartParam,
+  type Rng,
+} from '@gamedeck/shared';
 import { eq } from 'drizzle-orm';
 import { coinTransactions, playerItems, widgetPlayers } from '../src/db/schema.js';
 import { PlayerService } from '../src/players/player-service.js';
 import { ShopService } from '../src/shop/shop-service.js';
 import { SkinService } from '../src/skins/skin-service.js';
+import { StatsService } from '../src/stats/stats-service.js';
 import type { BotApi } from '../src/widget/bot-api.js';
 import { measureWidget, WIDGET_MAX_PACKED, type WidgetState } from '../src/widget/build.js';
 import { matFromSkin } from '../src/widget/mat.js';
 import { WidgetBot } from '../src/widget/widget-bot.js';
-import {
-  REFERRAL_BONUS_ROLLS,
-  REFERRAL_DAILY_LIMIT,
-  referralCode,
-  WidgetService,
-} from '../src/widget/widget-service.js';
+import { REFERRAL_BONUS_ROLLS, REFERRAL_DAILY_LIMIT, WidgetService } from '../src/widget/widget-service.js';
 import { testDatabase } from './helpers.js';
 
 /** Генератор, выдающий кубики по списку по кругу. */
@@ -24,6 +26,10 @@ function diceRng(...dice: number[]): Rng {
 }
 
 let nextTelegramId = 700_000;
+
+/** Параметр реферальной ссылки на бота: /start ref_<код игрока>. */
+const startOf = async (players: PlayerService, playerId: string) =>
+  referralStartParam(await players.referralCode(playerId));
 
 async function setup(rng: Rng, intervalSec = 60) {
   const { db } = await testDatabase();
@@ -210,7 +216,7 @@ describe('приглашение друга', () => {
     const friendId = await friendOf(context);
     await widget.rememberMessage(playerId, 5, 42);
 
-    expect(await widget.setReferrer(friendId, referralCode(playerId))).toBe(true);
+    expect(await widget.setReferrer(friendId, await startOf(context.players, playerId))).toBe(true);
     // Переход по ссылке сам по себе ничего не даёт: награда идёт за бросок.
     expect(await widget.claimReferral(friendId, 1000)).toBeNull();
     expect((await widget.state(playerId, 1000)).a).toBe(0);
@@ -241,15 +247,16 @@ describe('приглашение друга', () => {
     const friendId = await friendOf(context);
     const otherId = await friendOf(context);
 
-    expect(await widget.setReferrer(playerId, referralCode(playerId))).toBe(false);
+    expect(await widget.setReferrer(playerId, await startOf(context.players, playerId))).toBe(false);
     expect(await widget.setReferrer(friendId, 'ref_broken')).toBe(false);
-    expect(await widget.setReferrer(friendId, referralCode('00000000-0000-4000-8000-000000000000'))).toBe(false);
+    expect(await widget.setReferrer(friendId, 'ref_zzzzzzzz')).toBe(false);
+    expect(await widget.setReferrer(friendId, 'ref_00000000000040008000000000000000')).toBe(false);
 
-    expect(await widget.setReferrer(friendId, referralCode(playerId))).toBe(true);
-    expect(await widget.setReferrer(friendId, referralCode(otherId))).toBe(false);
+    expect(await widget.setReferrer(friendId, await startOf(context.players, playerId))).toBe(true);
+    expect(await widget.setReferrer(friendId, await startOf(context.players, otherId))).toBe(false);
 
     await widget.roll(otherId, 1000);
-    expect(await widget.setReferrer(otherId, referralCode(playerId))).toBe(false);
+    expect(await widget.setReferrer(otherId, await startOf(context.players, playerId))).toBe(false);
   });
 
   it('пригласивший получает награду не больше чем за десять друзей в сутки', async () => {
@@ -257,7 +264,7 @@ describe('приглашение друга', () => {
     const { widget, playerId } = context;
     const invite = async (now: number) => {
       const friendId = await friendOf(context);
-      await widget.setReferrer(friendId, referralCode(playerId));
+      await widget.setReferrer(friendId, await startOf(context.players, playerId));
       await widget.roll(friendId, now);
       await widget.claimReferral(friendId, now);
       return friendId;
@@ -274,6 +281,46 @@ describe('приглашение друга', () => {
     // Через сутки счётчик свободен.
     await invite(1000 + 24 * 60 * 60 + 1);
     expect((await widget.state(playerId, 1000)).a).toBe((REFERRAL_DAILY_LIMIT + 1) * REFERRAL_BONUS_ROLLS);
+  });
+
+  it('реферальный код — 8 символов, а старые длинные ссылки ref_<id> продолжают работать', async () => {
+    const context = await setup(diceRng(1, 3, 5));
+    const { widget, players, playerId } = context;
+    expect(await players.referralCode(playerId)).toMatch(/^[a-z0-9]{8}$/);
+    expect(await players.referralCode(playerId)).not.toBe(await players.referralCode(await friendOf(context)));
+
+    const friendId = await friendOf(context);
+    expect(await widget.setReferrer(friendId, `ref_${playerId.replaceAll('-', '')}`)).toBe(true);
+  });
+
+  it('игравший за столом новичком не считается, а первая партия приглашённого приносит награду', async () => {
+    const context = await setup(diceRng(1, 3, 5));
+    const { db, widget, playerId } = context;
+    const stats = new StatsService(db);
+    const veteranId = await friendOf(context);
+    const friendId = await friendOf(context);
+    const playMatch = (ids: string[]) =>
+      stats.recordMatch({
+        gameId: 'dice-high',
+        roomCode: 'K7M2Q',
+        stake: 0,
+        winnerId: ids[0]!,
+        startedAt: new Date(),
+        finishedAt: new Date(),
+        players: ids.map((id, seat) => ({ playerId: id, seat, place: seat + 1 })),
+      });
+
+    await playMatch([veteranId, playerId]);
+    expect(await widget.setReferrerId(veteranId, playerId)).toBe(false);
+    expect(await widget.setReferrer(veteranId, await startOf(context.players, playerId))).toBe(false);
+
+    // Приглашение в комнату: запомнили, но до партии награды нет.
+    expect(await widget.setReferrerId(friendId, playerId)).toBe(true);
+    expect(await widget.claimReferral(friendId, 1000)).toBeNull();
+    await playMatch([friendId, playerId]);
+    await widget.claimReferral(friendId, 1000);
+    expect((await widget.state(friendId, 1000)).a).toBe(REFERRAL_BONUS_ROLLS);
+    expect((await widget.state(playerId, 1000)).a).toBe(REFERRAL_BONUS_ROLLS);
   });
 });
 
@@ -313,7 +360,7 @@ describe('бот с виджетом', () => {
     expect(sent.params).toMatchObject({ chat_id: 5, allow_queries: true });
     expect(measureWidget(sent.params.html as string).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
     expect(sent.params.html).toContain('https://t.me/example_bot/play');
-    const referral = `https://t.me/example_bot?start=${referralCode(playerId)}`;
+    const referral = `https://t.me/example_bot?start=${await startOf(players, playerId)}`;
     expect(sent.params.html).toContain(`https://t.me/share/url?url=${encodeURIComponent(referral)}`);
     expect(JSON.parse(sent.params.chat_data as string)).toMatchObject({ r: 3, b: 500 } satisfies Partial<WidgetState>);
     const [row] = await db.select().from(widgetPlayers).where(eq(widgetPlayers.playerId, playerId));
@@ -347,7 +394,7 @@ describe('бот с виджетом', () => {
     const { players, skins, widget, user, playerId } = await setup(diceRng(1, 2, 4));
     const { api, calls } = fakeApi(true);
     const bot = new WidgetBot({ api, players, skins, widget, appUrl: null, log, now: () => 1000 });
-    const referral = `https://t.me/example_bot?start=${referralCode(playerId)}`;
+    const referral = `https://t.me/example_bot?start=${await startOf(players, playerId)}`;
 
     // Кнопка уходит из виджета под него: внутри виджета есть только «Поделиться» с голым адресом.
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: user } });
@@ -393,7 +440,7 @@ describe('бот с виджетом', () => {
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: user } });
     await bot.handleUpdate({
       update_id: 2,
-      message: { chat: { id: 6, type: 'private' }, from: friend, text: `/start ${referralCode(playerId)}` },
+      message: { chat: { id: 6, type: 'private' }, from: friend, text: `/start ${await startOf(players, playerId)}` },
     });
     const friendId = await players.ensureTelegramPlayer(friend);
     const [row] = await db.select().from(widgetPlayers).where(eq(widgetPlayers.playerId, friendId));

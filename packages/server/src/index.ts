@@ -1,18 +1,21 @@
-import { buildApp, cryptoRng } from './app.js';
+import { buildApp } from './app.js';
 import { config } from './config.js';
 import { openDatabase } from './db/client.js';
 import { createBotApi } from './widget/bot-api.js';
 import { WidgetBot } from './widget/widget-bot.js';
-import { WidgetService } from './widget/widget-service.js';
 
 // Сначала база (с миграциями), потом приложение: без базы сервер не стартует.
 const database = await openDatabase(config.databaseUrl);
-const { app, players, skins } = await buildApp({
+// Бот создаётся после приложения, а наградить за первую партию друга нужно уже из приложения.
+let bot: WidgetBot | null = null;
+const { app, players, skins, widget } = await buildApp({
   db: database.db,
   startingCoins: config.startingCoins,
   serveClient: true,
   logger: { level: config.logLevel },
   disconnectGraceMs: config.disconnectGraceMs,
+  widgetRollIntervalSec: config.widgetRollIntervalSec,
+  onReferrerRewarded: (referrer) => void bot?.refreshReferrerWidget(referrer),
   telegramAppUrl: config.telegramAppUrl,
   telegram: config.telegramBotToken
     ? { botToken: config.telegramBotToken, maxAgeSec: config.telegramInitDataMaxAgeSec }
@@ -20,13 +23,13 @@ const { app, players, skins } = await buildApp({
 });
 
 // Бот с виджетом включается отдельно: ему нужен доступ к api.telegram.org, а игре — нет.
-const bot =
+bot =
   config.telegramBotToken && config.telegramBotPolling
     ? new WidgetBot({
         api: createBotApi(config.telegramBotToken, config.telegramProxyUrl),
         players,
         skins,
-        widget: new WidgetService(database.db, players, cryptoRng, config.widgetRollIntervalSec),
+        widget,
         appUrl: config.telegramAppUrl,
         log: app.log,
       })

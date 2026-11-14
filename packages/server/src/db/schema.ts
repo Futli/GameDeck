@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -19,6 +20,14 @@ import {
  * а drizzle-orm выводит из него типы для запросов.
  */
 
+/**
+ * Случайный реферальный код: 8 строчных букв и цифр, как требует referralCodeSchema в shared
+ * (схему читает drizzle-kit, а он не видит пакет shared, поэтому алфавит здесь свой). 36^8 ≈ 2,8·10^12 вариантов: совпадение у двух игроков
+ * практически исключено, а если случится, уникальный индекс не даст записать дубль.
+ */
+const REFERRAL_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const newReferralCode = () => Array.from({ length: 8 }, () => REFERRAL_ALPHABET[randomInt(36)]).join('');
+
 /** Игрок. Анонимный (по токену) или привязанный к Telegram через telegram_id. */
 export const players = pgTable(
   'players',
@@ -36,6 +45,11 @@ export const players = pgTable(
     avatarUrl: text('avatar_url'),
     /** Баланс виртуальных монет. Меняется только вместе с записью в coin_transactions. */
     coins: bigint('coins', { mode: 'number' }).notNull().default(0),
+    /** Короткий реферальный код для ссылок-приглашений (см. shared/referral.ts). */
+    referralCode: text('referral_code')
+      .notNull()
+      .unique()
+      .$defaultFn(() => newReferralCode()),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
   },

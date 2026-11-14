@@ -7,16 +7,11 @@ import { Avatar } from './Avatar';
 import { ProfileStats } from './ProfileCard';
 import { SkinsScreen } from './SkinsScreen';
 import { StatsScreen } from './StatsScreen';
-import { startRoomCode, telegramName, telegramUser } from '../lib/telegram';
+import { inviteFor, linkRoomCode, startRoomCode, telegramName, telegramUser } from '../lib/telegram';
 import { useT } from '../i18n';
 import { LanguageSwitch } from './LanguageSwitch';
 
 const NAME_KEY = 'gamedeck.name';
-
-function initialCode() {
-  // Приглашение в браузере — /?room=K7M2Q, в Telegram — t.me/<бот>/<приложение>?startapp=K7M2Q.
-  return startRoomCode ?? new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '';
-}
 
 /** Пришли по приглашению из Telegram — сразу садимся за стол. Один раз, даже в StrictMode. */
 let autoJoinDone = false;
@@ -24,7 +19,7 @@ let autoJoinDone = false;
 export function Lobby() {
   // В Telegram ник по умолчанию — из профиля Telegram; игрок может его поменять.
   const [name, setName] = useState(() => telegramName ?? localStorage.getItem(NAME_KEY) ?? '');
-  const [code, setCode] = useState(initialCode);
+  const [code, setCode] = useState(linkRoomCode);
   const [password, setPassword] = useState('');
   const [needsPassword, setNeedsPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -63,12 +58,13 @@ export function Lobby() {
     if (autoJoinDone || !telegramName || !startRoomCode || !profile) return;
     autoJoinDone = true;
     const savedName = profile.displayName === 'Игрок' ? telegramName : profile.displayName;
-    void run(() => api.joinRoom({ code: startRoomCode!, name: savedName }));
+    void run(() => api.joinRoom({ code: startRoomCode!, name: savedName, invite: inviteFor(startRoomCode!) }));
   }, [profile]);
 
   const join = (e: FormEvent) => {
     e.preventDefault();
-    void run(() => api.joinRoom({ code, name, ...(password ? { password } : {}) }));
+    // Вход по коду — приглашение: новичок засчитается тому, кто поделился ссылкой, или хосту.
+    void run(() => api.joinRoom({ code, name, invite: inviteFor(code), ...(password ? { password } : {}) }));
   };
 
   if (screen === 'skins') return <SkinsScreen onBack={() => setScreen('main')} />;
