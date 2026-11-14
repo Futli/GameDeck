@@ -93,6 +93,8 @@ pnpm db:generate
 
 При старте сервер сам применяет новые миграции (`migrate()` в `openDatabase`). Drizzle помнит, какие уже применены, в служебной таблице `drizzle.__drizzle_migrations`. Поэтому обновление на TRASHCAN — это `git pull && pnpm build && pnpm start`, без ручного SQL.
 
+Миграция может менять и данные, а не только схему. Её пустой файл делает `pnpm --filter @gamedeck/server exec drizzle-kit generate --custom --name=<имя>`, SQL пишется руками. Пример — `0009_widget_legacy_skins.sql`: до PR #34 тройка в виджете выдавала предмет каталога (`player_items`, `source = 'reward'`), которого в Mini App не видно. Миграция выпускает за каждый такой выигрыш сгенерированный скин того же вида и редкости с датой выигрыша, и он появляется в «Моих скинах». Drizzle применяет миграцию один раз, поэтому скин не выпустится дважды. Тест в `skins.test.ts` прогоняет этот SQL на тестовых данных.
+
 Посмотреть данные глазами: `pnpm db:studio` откроет Drizzle Studio в браузере (нужен `DATABASE_URL` с Postgres).
 
 ## Шаг 5. Как игрок появляется в базе

@@ -64,6 +64,13 @@
       "when": 1794648742028,
       "tag": "0008_widget_version",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794654141810,
+      "tag": "0009_widget_legacy_skins",
+      "breakpoints": true
     }
   ]
 }

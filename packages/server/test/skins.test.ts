@@ -1,8 +1,10 @@
-import { eq } from 'drizzle-orm';
+import { readFile } from 'node:fs/promises';
+import { eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Database } from '../src/db/client.js';
-import { skins as skinsTable } from '../src/db/schema.js';
+import { playerItems, skins as skinsTable } from '../src/db/schema.js';
 import { PlayerService } from '../src/players/player-service.js';
+import { ShopService } from '../src/shop/shop-service.js';
 import { SkinService } from '../src/skins/skin-service.js';
 import { testDatabase } from './helpers.js';
 
@@ -96,5 +98,31 @@ describe('скины: выпуск, надевание, подарок', () => {
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     const { history } = await skins.card(mat.id);
     expect(history.filter((h) => h.reason === 'gift')).toHaveLength(1);
+  });
+
+  it('миграция 0009: старые выигрыши виджета из каталога становятся скинами в «Моих скинах»', async () => {
+    await new ShopService(database.db).syncCatalog();
+    const alice = await newPlayer();
+    const bob = await newPlayer();
+    const wonAt = new Date('2026-11-13T10:00:00Z');
+    await database.db.insert(playerItems).values([
+      { playerId: alice, itemId: 'mat-wood', source: 'reward', acquiredAt: wonAt },
+      { playerId: alice, itemId: 'dice-night', source: 'reward', acquiredAt: wonAt },
+      // Купленное в магазине — не выигрыш виджета, его миграция не трогает.
+      { playerId: bob, itemId: 'dice-bone', source: 'coins' },
+    ]);
+
+    const migration = await readFile(new URL('../drizzle/0009_widget_legacy_skins.sql', import.meta.url), 'utf8');
+    await database.db.execute(sql.raw(migration));
+
+    const won = await skins.list(alice);
+    expect(won.map((s) => [s.kind, s.rarity]).sort()).toEqual([
+      ['dice', 'epic'],
+      ['mat', 'common'],
+    ]);
+    expect(won.every((s) => s.tradable && s.createdAt === wonAt.toISOString())).toBe(true);
+    const { history } = await skins.card(won[0]!.id);
+    expect(history).toMatchObject([{ reason: 'mint', fromPlayerId: null, toPlayerId: alice }]);
+    expect(await skins.list(bob)).toEqual([]);
   });
 });
