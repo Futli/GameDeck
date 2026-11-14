@@ -1,5 +1,7 @@
 import {
+  PLAYER_COLOR_HEX,
   accrueWidgetRolls,
+  generateSkin,
   referralCodeSchema,
   rerollWidgetDie,
   rollWidgetDice,
@@ -17,7 +19,8 @@ import { matchPlayers, players, widgetPlayers } from '../db/schema.js';
 import { changeCoins, type Tx } from '../db/wallet.js';
 import type { PlayerService } from '../players/player-service.js';
 import type { SkinService } from '../skins/skin-service.js';
-import type { WidgetRollAnswer, WidgetState } from './build.js';
+import { buildWidgetHtml, type WidgetRollAnswer, type WidgetState } from './build.js';
+import { cupFromSkin, defaultCup, feltMat, matFromSkin } from './mat.js';
 import { BOT_TEXTS, prizeText, type BotLang } from './texts.js';
 
 /**
@@ -129,6 +132,42 @@ export class WidgetService {
       ...(row && row.modifiers > 0 ? { h: rerollHint(row, lang) } : {}),
       ...(dice ? { d: dice } : {}),
     };
+  }
+
+  /**
+   * HTML виджета со скинами, надетыми на игроке, на языке lang. Один и тот же для чата с ботом
+   * и для главной Mini App. Надетый сгенерированный коврик рисуется тем же генератором, что и на столе;
+   * без него — сукно. Тесты держат любой коврик в 4 КБ виджета, но если генератор когда-нибудь
+   * выйдет за лимит, игрок получит виджет с сукном, а не ошибку: onFallback узнает, какой скин не влез.
+   */
+  async html(playerId: string, lang: BotLang, onFallback?: (error: unknown, mat: unknown) => void): Promise<string> {
+    const equipped = await this.skins.equipped(playerId);
+    const dice = await this.players.diceStyle(playerId);
+    const red = PLAYER_COLOR_HEX.red;
+    const cup = equipped.cup ? cupFromSkin(generateSkin(equipped.cup).render(), red.main) : defaultCup(red);
+    try {
+      const mat = equipped.mat ? matFromSkin(generateSkin(equipped.mat).render(), red.main) : feltMat();
+      return buildWidgetHtml({ mat, dice, cup }, lang);
+    } catch (error) {
+      onFallback?.(error, equipped.mat);
+      return buildWidgetHtml({ mat: feltMat(), dice, cup }, lang);
+    }
+  }
+
+  /**
+   * Ответ на запрос виджета: «r» — бросок, «m0»–«m2» — переброс кубика с этим номером.
+   * Что-то другое — FAILED: виджет покажет общий текст ошибки. Так отвечают и бот, и Mini App.
+   */
+  async answer(
+    playerId: string,
+    data: string,
+    now: number,
+    lang: BotLang,
+  ): Promise<WidgetRollResult | { e: 'FAILED' }> {
+    const reroll = /^m([0-2])$/.exec(data);
+    if (data === 'r') return this.roll(playerId, now, lang);
+    if (reroll) return this.reroll(playerId, Number(reroll[1]), now, lang);
+    return { e: 'FAILED' };
   }
 
   /**

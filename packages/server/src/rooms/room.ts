@@ -299,6 +299,7 @@ export class Room {
       code: this.code,
       status: this.status,
       settings: { ...settings, hasPassword: password !== null },
+      invitePassword: viewerId !== null && this.players.has(viewerId) ? password : null,
       players: [...this.players.values()]
         .sort((a, b) => a.seat - b.seat)
         .map((p) => ({ ...p, isHost: p.id === this.hostId })),
@@ -320,6 +321,11 @@ export class Room {
     };
   }
 
+  /** Комната с паролем: в общий список не попадает. */
+  get isPrivate(): boolean {
+    return this.settings.password !== null;
+  }
+
   /** Короткая карточка для списка комнат на главной. */
   toSummary(): RoomSummary {
     return {
@@ -327,7 +333,6 @@ export class Room {
       status: this.status,
       gameId: this.settings.gameId,
       stake: this.settings.stake,
-      hasPassword: this.settings.password !== null,
       hostName: this.players.get(this.hostId)?.name ?? '',
       players: this.players.size,
       maxPlayers: this.settings.maxPlayers,

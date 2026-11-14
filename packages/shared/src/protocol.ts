@@ -91,6 +91,11 @@ export interface RoomView {
   status: RoomStatus;
   /** Пароль наружу не отдаём — только факт, что он есть. */
   settings: Omit<RoomSettings, 'password'> & { hasPassword: boolean };
+  /**
+   * Пароль комнаты для ссылки-приглашения: по ней друг входит, не вводя его. Приходит только тем,
+   * кто уже сидит в комнате (они его знают или вошли по такой же ссылке); остальным — null.
+   */
+  invitePassword: string | null;
   players: PlayerView[];
   game: GameView | null;
   /** Идёт сбор подтверждений перед партией (модалка у всех). null — не идёт. */
@@ -98,15 +103,14 @@ export interface RoomView {
 }
 
 /**
- * Комната в списке на главной. Только публичное: без игроков по именам,
- * без состояния игры и, конечно, без пароля.
+ * Комната в списке на главной. Только публичное: без игроков по именам и без состояния игры.
+ * Комнаты с паролем в список не попадают: в них входят по коду или по ссылке-приглашению.
  */
 export interface RoomSummary {
   code: string;
   status: RoomStatus;
   gameId: string;
   stake: number;
-  hasPassword: boolean;
   hostName: string;
   players: number;
   maxPlayers: number;

@@ -28,6 +28,8 @@ export interface AppOptions {
   telegram?: { botToken: string; maxAgeSec: number };
   /** https://t.me/<бот>/<приложение> — для ссылок-приглашений. */
   telegramAppUrl?: string | null;
+  /** Бот присылает виджет «Кубик удачи» в чат: тогда Mini App предлагает открыть его там. */
+  chatWidget?: boolean;
   /** Как часто в виджете копится бросок. По умолчанию WIDGET_ROLL_INTERVAL_SEC. */
   widgetRollIntervalSec?: number;
   /** Пригласивший получил награду за первую партию друга: бот обновит его виджет. */
@@ -71,7 +73,17 @@ export async function buildApp(options: AppOptions) {
     onReferrerRewarded: options.onReferrerRewarded,
     log: app.log,
   });
-  registerHttpRoutes(app, { rooms, players, stats, shop, skins, telegramAppUrl: options.telegramAppUrl ?? null });
+  registerHttpRoutes(app, {
+    rooms,
+    players,
+    stats,
+    shop,
+    skins,
+    widget,
+    telegramAppUrl: options.telegramAppUrl ?? null,
+    chatWidget: options.chatWidget ?? false,
+    onReferrerRewarded: options.onReferrerRewarded,
+  });
   if (options.serveClient) await registerClient(app);
 
   // Перед остановкой HTTP закрываем все сокеты, иначе server.close() будет ждать их вечно.

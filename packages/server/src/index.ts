@@ -17,6 +17,8 @@ const { app, players, skins, widget } = await buildApp({
   widgetRollIntervalSec: config.widgetRollIntervalSec,
   onReferrerRewarded: (referrer) => void bot?.refreshReferrerWidget(referrer),
   telegramAppUrl: config.telegramAppUrl,
+  // Кнопку «Открыть виджет в чате» в Mini App показываем, только если бот его присылает.
+  chatWidget: Boolean(config.telegramBotToken && config.telegramBotPolling && config.telegramChatWidget),
   telegram: config.telegramBotToken
     ? { botToken: config.telegramBotToken, maxAgeSec: config.telegramInitDataMaxAgeSec }
     : undefined,
@@ -31,6 +33,7 @@ bot =
         skins,
         widget,
         appUrl: config.telegramAppUrl,
+        chatWidget: config.telegramChatWidget,
         log: app.log,
       })
     : null;

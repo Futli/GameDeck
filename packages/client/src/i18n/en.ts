@@ -29,7 +29,6 @@ export const en: Messages = {
   },
 
   lobby: {
-    tagline: 'Dice games with friends in real time',
     yourName: 'Your name',
     namePlaceholder: 'For example, Alex',
     whatToPlay: 'What are we playing',
@@ -41,20 +40,28 @@ export const en: Messages = {
     joinByCode: 'or join by code',
     codeAria: 'Room code',
     password: 'Password',
+    passwordNeeded: 'This room has a password: enter it to join',
     join: 'Join',
     mySkins: 'My skins',
-    luck: '🎲 Lucky Dice',
     stats: 'Stats',
+    settings: 'Settings',
+    luckRules: 'Lucky Dice prizes and rules',
+    rating: 'rating',
+    noRating: 'not played yet',
   },
 
   profile: {
     coins: 'coins',
-    games: 'games',
-    wins: 'wins',
-    stakeCoins: 'coins in stakes',
-    rating: (game) => `rating · ${game}`,
-    wonLost: (won, lost) => `Won ${won}, lost ${lost}`,
-    firstGame: 'Play your first game and your stats will show up here',
+  },
+
+  settingsPage: {
+    title: 'Settings',
+    back: '← Back',
+    nameHint: 'Other players see you at the table under this name.',
+  },
+
+  gamePage: {
+    back: '← Back',
   },
 
   luck: {
@@ -71,7 +78,7 @@ export const en: Messages = {
     lostWidget: 'Deleted the widget? Tap the button above or send /dice to the bot to get a new one.',
     howTitle: 'How to play',
     how: [
-      'The widget lives in the chat with the bot: roll three dice without opening the app.',
+      'Roll three dice right on the app home screen.',
       'You get a roll every 3 hours, up to three saved. When a friend you invited makes their first roll, you both get 3 more.',
       'Coins are shared with the app: use them for table stakes and skins.',
     ],

@@ -37,7 +37,7 @@ interface NewPlayer {
 export class PlayerService {
   constructor(
     private readonly db: Db,
-    private readonly startingCoins = 500,
+    private readonly startingCoins = 0,
   ) {}
 
   /** Найти игрока по токену или зарегистрировать нового. */

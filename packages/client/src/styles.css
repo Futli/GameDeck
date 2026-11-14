@@ -77,7 +77,13 @@ select {
 .app {
   max-width: 720px;
   margin: 0 auto;
-  padding: 16px;
+  /*
+   * Отступы от краёв: в Telegram — его системные панели и кнопки поверх приложения («Закрыть», меню),
+   * их кладёт в --safe-* lib/telegram.ts; в браузере телефона — вырез экрана (env). Иначе кнопки
+   * «← Назад» и иконки справа вверху оказываются под кнопками Telegram.
+   */
+  padding: calc(16px + var(--safe-top, env(safe-area-inset-top, 0px))) calc(16px + var(--safe-right, 0px))
+    calc(16px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))) calc(16px + var(--safe-left, 0px));
   min-height: 100dvh;
 }
 .muted {
@@ -92,7 +98,7 @@ select {
 .notice {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: calc(16px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   transform: translateX(-50%);
   background: var(--surface-2);
   padding: 10px 16px;
@@ -101,24 +107,130 @@ select {
   max-width: calc(100% - 32px);
 }
 
-/* ─── Лобби ─────────────────────────────────────────────── */
+/* ─── Главная ───────────────────────────────────────────── */
 
-.lobby {
+.home {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 360px;
-  margin: 10vh auto 0;
+  max-width: 420px;
+  margin: 0 auto;
 }
-/* Переключатель языка: маленькие RU / EN в правом верхнем углу главной. */
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+/* Мои скины, статистика и настройки — иконками в правом верхнем углу. */
+.home-actions {
+  display: flex;
+  gap: 6px;
+}
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+}
+/* Виджет «Кубик удачи»: тот же HTML, что в чате с ботом, во фрейме. Высоту фрейм сообщает сам. */
+.luck-widget {
+  /* Схема цветов как у документа во фрейме, иначе браузер зальёт прозрачные углы белым. */
+  color-scheme: light;
+  display: block;
+  width: 100%;
+  height: 0;
+  border: 0;
+  background: transparent;
+}
+.luck-widget--loading {
+  height: auto;
+  aspect-ratio: 1 / 1.05;
+  border-radius: 24px;
+  background: var(--surface);
+}
+.luck-rules {
+  align-self: center;
+  margin-top: -8px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+.coins-card {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.coins-card b {
+  font-size: 1.4rem;
+  font-variant-numeric: tabular-nums;
+}
+.coins-card__icon {
+  align-self: center;
+  font-size: 1.3rem;
+}
+.game-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.game-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: var(--surface);
+  padding: 12px 14px;
+}
+.game-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.game-card__text .muted,
+.game-card__rating .muted {
+  font-size: 0.8rem;
+}
+.game-card__rating {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: none;
+}
+.game-card__rating b {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+.screen-lead {
+  margin: -6px 0 0;
+  font-size: 0.9rem;
+}
+.create-room {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.field-hint {
+  margin: -8px 0 0;
+  font-size: 0.85rem;
+}
+
+/* Переключатель языка на странице настроек: RU / EN. */
 .lang-switch {
-  align-self: flex-end;
+  align-self: flex-start;
   display: flex;
   gap: 2px;
   padding: 2px;
   border-radius: var(--radius);
   background: var(--surface);
-  margin-bottom: -8px;
 }
 .lang-switch__option {
   padding: 4px 10px;
@@ -133,11 +245,8 @@ select {
 }
 .logo {
   margin: 0;
-  font-size: 2.2rem;
+  font-size: 1.7rem;
   letter-spacing: 0.02em;
-}
-.logo + .muted {
-  margin: -8px 0 8px;
 }
 .field {
   display: flex;
@@ -180,11 +289,6 @@ select {
   flex-direction: column;
   gap: 8px;
 }
-.room-list__group {
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin-top: 6px;
-}
 .room-card {
   background: var(--surface);
   border-radius: var(--radius);
@@ -216,14 +320,6 @@ select {
   min-width: 0;
   font-size: 0.9rem;
   overflow-wrap: anywhere;
-}
-.room-card__password {
-  display: flex;
-  gap: 8px;
-}
-.room-card__password input {
-  flex: 1;
-  min-width: 0;
 }
 .code-input {
   text-align: center;
@@ -755,31 +851,6 @@ select {
   }
 }
 
-/* ─── Выбор игры ────────────────────────────────────────── */
-
-.game-picker {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-}
-.game-option {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  text-align: left;
-  background: var(--surface);
-  border: 2px solid var(--surface-2);
-  padding: 10px 12px;
-}
-.game-option .muted {
-  font-size: 0.8rem;
-}
-.game-option--active {
-  border-color: var(--accent);
-  background: var(--surface-2);
-}
-
 /* ─── Перудо ────────────────────────────────────────────── */
 
 .pd-mat {
@@ -1260,13 +1331,6 @@ select {
 
 /* ─── «Кубик удачи»: правила, призы и модификаторы виджета ── */
 
-/* Кнопка на главной — в цветах стола, как сам виджет: сукно и золотая кайма. */
-.luck-link {
-  background: radial-gradient(#1b9a5c, #0a4a2e);
-  color: #ffe08a;
-  font-weight: 700;
-  box-shadow: inset 0 0 0 2px #f2c94c;
-}
 .luck-prize {
   display: flex;
   flex-direction: column;

@@ -39,10 +39,24 @@ interface TelegramWebApp {
   ready(): void;
   expand(): void;
   disableVerticalSwipes?(): void;
+  /**
+   * Отступы от краёв экрана (Bot API 8.0+): safeAreaInset — вырез и системные панели телефона,
+   * contentSafeAreaInset — кнопки самого Telegram поверх приложения («Закрыть», меню).
+   */
+  safeAreaInset?: Insets;
+  contentSafeAreaInset?: Insets;
+  HapticFeedback?: { notificationOccurred(type: 'error' | 'success' | 'warning'): void };
   setHeaderColor?(color: string): void;
   setBackgroundColor?(color: string): void;
   openTelegramLink(url: string): void;
-  onEvent(event: 'themeChanged', callback: () => void): void;
+  onEvent(event: 'themeChanged' | 'safeAreaChanged' | 'contentSafeAreaChanged', callback: () => void): void;
+}
+
+interface Insets {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
 }
 
 declare global {
@@ -68,8 +82,10 @@ export const telegramName = telegramUser
   : null;
 
 /**
- * Приглашение в комнату приходит как startapp=K7M2Q_ab12cd34 (Telegram) или /?room=K7M2Q&ref=ab12cd34
- * (браузер): код комнаты и реферальный код того, кто поделился ссылкой. В старых ссылках кода нет.
+ * Приглашение в комнату приходит как startapp=K7M2Q_ab12cd34_<пароль> (Telegram) или
+ * /?room=K7M2Q&ref=ab12cd34&pw=<пароль> (браузер): код комнаты, реферальный код того, кто поделился
+ * ссылкой, и пароль комнаты, если он есть. В старых ссылках нет ни пароля, ни реферального кода.
+ * В startapp разрешены только буквы, цифры, «_» и «-», поэтому пароль там записан hex-байтами UTF-8.
  */
 const startParam = tg?.initDataUnsafe.start_param ?? '';
 const urlParams = new URLSearchParams(location.search);
@@ -85,14 +101,35 @@ export const startLuck: { skinId: string | null } | null = luckMatch
     ? { skinId: urlParams.get('luck') || null }
     : null;
 
-const [startCode, ...startRef] = luckMatch ? [] : startParam.split('_');
+const [startCode, startRef, startPassword] = luckMatch ? [] : startParam.split('_');
 
-/** Код комнаты из ссылки t.me/<бот>/<приложение>?startapp=…: по нему Mini App сразу садит за стол. */
-export const startRoomCode = startCode ? startCode.toUpperCase() : null;
+/** Код комнаты из ссылки t.me/<бот>/<приложение>?startapp=… */
+const startRoomCode = startCode ? startCode.toUpperCase() : null;
 
-/** Код комнаты из ссылки-приглашения: им заполнено поле «Код комнаты». */
+/** Код комнаты из ссылки-приглашения: по нему приложение сразу садит за стол. '' — ссылки нет. */
 export const linkRoomCode = startRoomCode ?? urlParams.get('room')?.toUpperCase() ?? '';
-const linkRef = startRoomCode ? startRef.join('_') : urlParams.get('ref');
+const linkRef = startRoomCode ? (startRef ?? null) : urlParams.get('ref');
+const linkPassword = startRoomCode ? fromHex(startPassword ?? '') : urlParams.get('pw');
+
+function toHex(text: string): string {
+  return [...new TextEncoder().encode(text)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** Битый hex — как будто пароля в ссылке нет: игрока спросят пароль. */
+function fromHex(hex: string): string | null {
+  if (!hex || !/^(?:[0-9a-f]{2})+$/i.test(hex)) return null;
+  try {
+    const bytes = new Uint8Array(hex.match(/../g)!.map((pair) => parseInt(pair, 16)));
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/** Пароль комнаты из ссылки-приглашения: с ним игрок входит, не вводя пароль. */
+export function invitePasswordFor(code: string): string | null {
+  return code === linkRoomCode ? linkPassword : null;
+}
 
 /**
  * Как игрок узнал код (поле invite в room:join). Код из ссылки с целым реферальным кодом —
@@ -130,11 +167,27 @@ function applyTheme(app: TelegramWebApp): void {
   if (t.bg_color) app.setBackgroundColor?.(t.bg_color);
 }
 
-/** Вызвать один раз при старте: тема, полный экран и сигнал Telegram «приложение готово». */
+/**
+ * Отступы Telegram → CSS-переменные --safe-*: системные панели телефона плюс кнопки Telegram
+ * («Закрыть» слева и меню справа в полноэкранном режиме). На них .app отодвигает всё содержимое,
+ * чтобы кнопки приложения не оказались под кнопками Telegram. Вне Telegram работают env(safe-area-inset-*).
+ */
+function applySafeArea(app: TelegramWebApp): void {
+  const root = document.documentElement;
+  for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+    const inset = (app.safeAreaInset?.[side] ?? 0) + (app.contentSafeAreaInset?.[side] ?? 0);
+    root.style.setProperty(`--safe-${side}`, `${inset}px`);
+  }
+}
+
+/** Вызвать один раз при старте: тема, отступы, полный экран и сигнал Telegram «приложение готово». */
 export function initTelegram(): void {
   if (!tg) return;
   applyTheme(tg);
   tg.onEvent('themeChanged', () => applyTheme(tg));
+  applySafeArea(tg);
+  tg.onEvent('safeAreaChanged', () => applySafeArea(tg));
+  tg.onEvent('contentSafeAreaChanged', () => applySafeArea(tg));
   tg.expand();
   // Свайп вниз по столу не должен закрывать игру.
   tg.disableVerticalSwipes?.();
@@ -143,11 +196,26 @@ export function initTelegram(): void {
 
 /**
  * Ссылка-приглашение: в Telegram — на Mini App, иначе — на сайт. В ней реферальный код того,
- * кто делится: новичок, пришедший по ссылке, засчитается ему как приглашённый друг.
+ * кто делится: новичок, пришедший по ссылке, засчитается ему как приглашённый друг. У комнаты
+ * с паролем в ссылке и пароль: друг войдёт, не вводя его.
  */
-export function inviteLink(code: string, telegramAppUrl: string | null, ref: string | null): string {
-  if (telegramAppUrl) return `${telegramAppUrl}?startapp=${ref ? `${code}_${ref}` : code}`;
-  return `${location.origin}/?room=${code}${ref ? `&ref=${ref}` : ''}`;
+export function inviteLink(
+  code: string,
+  telegramAppUrl: string | null,
+  ref: string | null,
+  password: string | null = null,
+): string {
+  if (telegramAppUrl) {
+    const parts = password ? [code, ref ?? '', toHex(password)] : ref ? [code, ref] : [code];
+    return `${telegramAppUrl}?startapp=${parts.join('_')}`;
+  }
+  const query = new URLSearchParams({ room: code, ...(ref ? { ref } : {}), ...(password ? { pw: password } : {}) });
+  return `${location.origin}/?${query.toString()}`;
+}
+
+/** Короткая вибрация Telegram, например на приз в «Кубике удачи». Вне Telegram — ничего. */
+export function haptic(type: 'error' | 'success' | 'warning'): void {
+  tg?.HapticFeedback?.notificationOccurred(type);
 }
 
 /** Открыть системное «Поделиться» Telegram со ссылкой на комнату и текстом приглашения. */

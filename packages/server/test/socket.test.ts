@@ -38,6 +38,8 @@ describe('socket protocol', () => {
       db,
       rng: () => ((faces[roll++ % faces.length] ?? 1) - 1) / 6,
       disconnectGraceMs: 50,
+      // Ставкам нужны монеты; по умолчанию новичок начинает с нуля.
+      startingCoins: 500,
     });
     const { app } = built;
     widget = built.widget;
@@ -162,16 +164,63 @@ describe('socket protocol', () => {
     expect(bad).toMatchObject({ ok: false, error: { code: 'BAD_REQUEST' } });
   });
 
+  it('главная Mini App: тот же виджет «Кубик удачи» и броски по HTTP', async () => {
+    const a = await client();
+    const auth = { authorization: `Bearer ${a.session.token}` };
+    expect((await fetch(`${url}/api/me/widget?lang=ru`)).status).toBe(401);
+
+    const page = (await (await fetch(`${url}/api/me/widget?lang=en`, { headers: auth })).json()) as {
+      html: string;
+      chatData: string;
+    };
+    expect(page.html).toContain('TelegramWidget');
+    expect(page.html).toContain('Roll');
+    expect(JSON.parse(page.chatData)).toMatchObject({ r: 3, b: 500 });
+
+    const query = (d: string) =>
+      fetch(`${url}/api/me/widget/query`, {
+        method: 'POST',
+        headers: { ...auth, 'content-type': 'application/json' },
+        body: JSON.stringify({ d, lang: 'ru' }),
+      }).then((r) => r.json() as Promise<{ result: string; chatData: string }>);
+    const rolled = await query('r');
+    const answer = JSON.parse(rolled.result) as { d: number[]; c: number; b: number };
+    expect(answer.d).toHaveLength(3);
+    expect(answer.b).toBe(500 + answer.c);
+    expect(JSON.parse(rolled.chatData)).toMatchObject({ r: 2, b: answer.b });
+    expect(JSON.parse((await query('zz')).result)).toEqual({ e: 'FAILED' });
+  });
+
+  it('пароль комнаты приходит сидящим в ней для ссылки-приглашения', async () => {
+    const a = await client();
+    const b = await client();
+    const created = await call<RoomView>(
+      a.socket.emitWithAck('room:create', { name: 'Алиса', settings: { password: 'pw' } }),
+    );
+    expect(created.invitePassword).toBe('pw');
+    const joined = await call<RoomView>(
+      b.socket.emitWithAck('room:join', { code: created.code, name: 'Боб', password: 'pw' }),
+    );
+    expect(joined.invitePassword).toBe('pw');
+    // Посторонний по HTTP видит только, что пароль есть.
+    const preview = (await (await fetch(`${url}/api/rooms/${created.code}`)).json()) as Record<string, unknown>;
+    expect(preview).toMatchObject({ hasPassword: true });
+    expect(JSON.stringify(preview)).not.toContain('pw"');
+  });
+
   it('главная видит список комнат и его обновления', async () => {
     const a = await client();
     const watcher = await client();
     expect(await call(watcher.socket.emitWithAck('rooms:watch'))).toEqual([]);
 
     const updated = new Promise<RoomSummary[]>((resolve) => watcher.socket.once('rooms:list', resolve));
-    const created = await call<RoomView>(
-      a.socket.emitWithAck('room:create', { name: 'Алиса', settings: { password: 'pw' } }),
-    );
-    expect(await updated).toMatchObject([{ code: created.code, hasPassword: true, hostName: 'Алиса', players: 1 }]);
+    const created = await call<RoomView>(a.socket.emitWithAck('room:create', { name: 'Алиса' }));
+    expect(await updated).toMatchObject([{ code: created.code, hostName: 'Алиса', players: 1 }]);
+
+    // Хост поставил пароль — комната пропадает из списка, но по коду с паролем в неё входят.
+    const hidden = new Promise<RoomSummary[]>((resolve) => watcher.socket.once('rooms:list', resolve));
+    await call(a.socket.emitWithAck('room:settings', { password: 'pw' }));
+    expect(await hidden).toEqual([]);
 
     const wrong = await watcher.socket.emitWithAck('room:join', { code: created.code, name: 'Боб', password: 'x' });
     expect(wrong).toMatchObject({ ok: false, error: { code: 'WRONG_PASSWORD' } });
