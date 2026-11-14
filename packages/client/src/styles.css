@@ -1330,3 +1330,28 @@ select {
   color: var(--muted);
   text-align: right;
 }
+
+/* Признаки скина, как атрибуты NFT: плашки «Quality / Epic». */
+.traits {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+  width: 100%;
+  margin: 4px 0;
+}
+.traits > div {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.traits dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.traits dd {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}

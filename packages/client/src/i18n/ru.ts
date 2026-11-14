@@ -113,7 +113,7 @@ export const ru = {
     back: '← Назад',
     kinds: { mat: 'Коврик', dice: 'Кубики', cup: 'Стакан' },
     rarities: { common: 'Обычный', rare: 'Редкий', epic: 'Эпический' },
-    serial: (n: number) => `№ ${n}`,
+    serial: (n: number) => `#${n}`,
     loading: 'Загружаем…',
     standard: 'Стандартный',
     playerColor: 'Цвет игрока',

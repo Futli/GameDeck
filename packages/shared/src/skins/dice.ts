@@ -24,16 +24,16 @@ const TEXTURES: Record<SkinRarity, Texture[]> = {
   rare: ['speckle', 'marble', 'split', 'stripes', 'gradient'],
   epic: ['marble', 'stars', 'facets', 'split'],
 };
-/** Как текстура звучит в названии: «Рубиновые кости в крапинку». */
-const TEXTURE_SUFFIX: Record<Texture, string> = {
-  plain: '',
-  speckle: ' в крапинку',
-  marble: ' под мрамор',
-  split: ' «инь-ян»',
-  stripes: ' в полоску',
-  gradient: '',
-  stars: ' со звёздами',
-  facets: ' с огранкой',
+/** Текстура в названии и признаках скина: «Ruby Marble Dice». У гладкой грани стиля в названии нет. */
+const TEXTURE_STYLE: Record<Texture, string> = {
+  plain: 'Plain',
+  speckle: 'Speckled',
+  marble: 'Marble',
+  split: 'Yin-Yang',
+  stripes: 'Striped',
+  gradient: 'Gradient',
+  stars: 'Starry',
+  facets: 'Faceted',
 };
 
 type PipShape = 'square' | 'round' | 'ring' | 'gem';
@@ -46,8 +46,14 @@ const PIP_SHAPES: Record<SkinRarity, PipShape[]> = {
 export interface DiceSkin {
   /** Грань с нужным числом точек. Параметры скина уже выбраны, рисование детерминировано. */
   face: (value: number) => PixelImage;
-  adjectives: [string, string, string, string];
-  suffix: string;
+  color: string;
+  style: string;
+  /** Форма точек: Square, Round, Ring, Gem. */
+  pips: string;
+  /** Точки цветом акцента, а не в тон грани. */
+  accentPips: boolean;
+  /** Металлическая кромка эпических кубиков: Gold или Silver; null — без кромки. */
+  edge: string | null;
 }
 
 /** Точки должны читаться на грани: если контраст слабый, уводим их в тёмное или светлое. */
@@ -186,5 +192,12 @@ export function generateDice(rng: Rng, seed: number, rarity: SkinRarity): DiceSk
     return image;
   };
 
-  return { face: render, adjectives: palette.name, suffix: TEXTURE_SUFFIX[texture] };
+  return {
+    face: render,
+    color: palette.name,
+    style: TEXTURE_STYLE[texture],
+    pips: { square: 'Square', round: 'Round', ring: 'Ring', gem: 'Gem' }[shape],
+    accentPips: pip === pipBase && accentPips,
+    edge: metalEdge ? (palette.metalName === 'gold' ? 'Gold' : 'Silver') : null,
+  };
 }

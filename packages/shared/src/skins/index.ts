@@ -3,7 +3,7 @@ import { generateDice } from './dice.js';
 import type { PixelImage } from './image.js';
 import { generateMat } from './mat.js';
 import { createRng } from './random.js';
-import { SKIN_RARITIES, type Gender, type SkinRarity } from './themes.js';
+import { SKIN_RARITIES, type SkinRarity } from './themes.js';
 
 export { CUP_HEIGHT, CUP_WIDTH } from './cup.js';
 export { DIE_SIZE } from './dice.js';
@@ -28,14 +28,36 @@ export interface SkinSeed {
   rarity: SkinRarity;
 }
 
+/** Признак скина, как атрибут NFT: «Quality: Epic», «Frame: Gold». Всегда по-английски. */
+export interface SkinTrait {
+  trait: string;
+  value: string;
+}
+
 export interface GeneratedSkin extends SkinSeed {
+  /** Название по одному правилу для всех: цвет, стиль, вид — «Emerald Honeycomb Mat», «Ruby Dice». */
   name: string;
+  /** Признаки по порядку: качество, цвет, стиль, затем детали вида (рамка, точки, отделка). */
+  traits: SkinTrait[];
   /** Коврик и стакан — одна картинка, у кубика — грань для значения 1..6. */
   render: (value?: number) => PixelImage;
 }
 
-const GENDER_INDEX: Record<Gender, number> = { m: 0, f: 1, n: 2, pl: 3 };
-const capitalize = (s: string) => s[0]!.toUpperCase() + s.slice(1);
+const QUALITY: Record<SkinRarity, string> = { common: 'Common', rare: 'Rare', epic: 'Epic' };
+const KIND_NAME: Record<SkinKind, string> = { mat: 'Mat', dice: 'Dice', cup: 'Cup' };
+/** Стили без узора в название не попадают: «Forest Dice», а не «Forest Plain Dice». */
+const UNNAMED_STYLES = new Set(['Plain', 'Gradient']);
+
+function nameOf(kind: SkinKind, color: string, style: string): string {
+  return [color, UNNAMED_STYLES.has(style) ? null : style, KIND_NAME[kind]].filter(Boolean).join(' ');
+}
+
+/** Признаки без пустых значений: у обычного коврика нет эмблемы, у обычных кубиков — кромки. */
+function traitsOf(rarity: SkinRarity, ...rest: Array<[string, string | null]>): SkinTrait[] {
+  return [['Quality', QUALITY[rarity]] as [string, string | null], ...rest]
+    .filter((pair): pair is [string, string] => pair[1] !== null)
+    .map(([trait, value]) => ({ trait, value }));
+}
 
 /** Сгенерировать скин по seed. Чистая функция: тот же вход — тот же скин на любом устройстве. */
 export function generateSkin({ kind, seed, rarity }: SkinSeed): GeneratedSkin {
@@ -43,16 +65,50 @@ export function generateSkin({ kind, seed, rarity }: SkinSeed): GeneratedSkin {
   switch (kind) {
     case 'mat': {
       const mat = generateMat(rng, seed, rarity);
-      const name = `${mat.adjectives[GENDER_INDEX[mat.gender]]} ${mat.noun}`;
-      return { kind, seed, rarity, name: capitalize(name), render: () => mat.image };
+      return {
+        kind,
+        seed,
+        rarity,
+        name: nameOf(kind, mat.color, mat.style),
+        traits: traitsOf(
+          rarity,
+          ['Color', mat.color],
+          ['Pattern', mat.style],
+          ['Frame', mat.frame],
+          ['Stitching', mat.stitched ? 'Dashed' : null],
+          ['Emblem', mat.emblem],
+        ),
+        render: () => mat.image,
+      };
     }
     case 'dice': {
       const dice = generateDice(rng, seed, rarity);
-      return { kind, seed, rarity, name: `${dice.adjectives[3]} кости${dice.suffix}`, render: (v = 5) => dice.face(v) };
+      return {
+        kind,
+        seed,
+        rarity,
+        name: nameOf(kind, dice.color, dice.style),
+        traits: traitsOf(
+          rarity,
+          ['Color', dice.color],
+          ['Texture', dice.style],
+          ['Pips', dice.pips],
+          ['Pip Color', dice.accentPips ? 'Accent' : 'Contrast'],
+          ['Edge', dice.edge],
+        ),
+        render: (v = 5) => dice.face(v),
+      };
     }
     case 'cup': {
       const cup = generateCup(rng, seed, rarity);
-      return { kind, seed, rarity, name: `${cup.adjectives[0]} стакан${cup.suffix}`, render: () => cup.image };
+      return {
+        kind,
+        seed,
+        rarity,
+        name: nameOf(kind, cup.color, cup.style),
+        traits: traitsOf(rarity, ['Color', cup.color], ['Pattern', cup.style], ['Trim', cup.trim]),
+        render: () => cup.image,
+      };
     }
   }
 }

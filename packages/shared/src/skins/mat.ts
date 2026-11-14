@@ -1,6 +1,6 @@
 import { PLAYER_SLOT, createImage, setPixel, type PixelImage } from './image.js';
 import { bandTone, fbm, pixelNoise, valueNoise, type Rng } from './random.js';
-import { pickPalette, type Gender, type SkinRarity } from './themes.js';
+import { pickPalette, type SkinRarity } from './themes.js';
 
 export const MAT_WIDTH = 128;
 export const MAT_HEIGHT = 96;
@@ -15,8 +15,8 @@ const PLAYER = 15;
 
 type Pattern = (x: number, y: number) => number;
 interface PatternDef {
-  noun: string;
-  gender: Gender;
+  /** Стиль в названии и признаках скина: «Honeycomb», «Rift». */
+  style: string;
   make: (rng: Rng, seed: number) => Pattern;
 }
 
@@ -26,8 +26,7 @@ interface PatternDef {
  */
 const PATTERNS: Record<string, PatternDef> = {
   felt: {
-    noun: 'сукно',
-    gender: 'n',
+    style: 'Felt',
     // Сукно: мягкие пятна ворса, переходы дизерингом.
     make: (rng, seed) => {
       const cell = rng.range(10, 18);
@@ -35,8 +34,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   stripes: {
-    noun: 'полоска',
-    gender: 'f',
+    style: 'Striped',
     make: (rng) => {
       const width = rng.pick([6, 8]);
       const dir = rng.pick([1, -1]);
@@ -47,8 +45,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   checker: {
-    noun: 'клетка',
-    gender: 'f',
+    style: 'Checkered',
     make: (rng) => {
       const size = rng.pick([8, 16]);
       return (x, y) => {
@@ -60,8 +57,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   dots: {
-    noun: 'горошек',
-    gender: 'm',
+    style: 'Polka Dot',
     make: (rng) => {
       const step = rng.pick([8, 10, 12]);
       const r = rng.pick([1.5, 2.2]);
@@ -76,8 +72,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   linen: {
-    noun: 'рогожка',
-    gender: 'f',
+    style: 'Linen',
     make: (rng, seed) => {
       const cell = rng.range(14, 24);
       return (x, y) => {
@@ -88,8 +83,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   wood: {
-    noun: 'шпон',
-    gender: 'm',
+    style: 'Veneer',
     make: (rng, seed) => {
       const freq = rng.range(0.35, 0.55);
       const warp = rng.range(6, 12);
@@ -100,8 +94,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   tartan: {
-    noun: 'шотландка',
-    gender: 'f',
+    style: 'Tartan',
     make: (rng) => {
       const period = rng.pick([24, 32]);
       const wide = rng.pick([4, 6]);
@@ -122,8 +115,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   waves: {
-    noun: 'волна',
-    gender: 'f',
+    style: 'Wave',
     make: (rng) => {
       const period = rng.pick([16, 20]);
       const amp = rng.range(2, 4);
@@ -138,8 +130,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   scales: {
-    noun: 'чешуя',
-    gender: 'f',
+    style: 'Scale',
     make: () => {
       const r = 12;
       return (x, y) => {
@@ -153,8 +144,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   argyle: {
-    noun: 'ромбы',
-    gender: 'pl',
+    style: 'Argyle',
     make: () => {
       const w = 32;
       const h = w;
@@ -170,8 +160,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   chevron: {
-    noun: 'ёлочка',
-    gender: 'f',
+    style: 'Chevron',
     make: (rng) => {
       const period = 16;
       const width = rng.pick([16, 20]);
@@ -184,8 +173,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   honeycomb: {
-    noun: 'соты',
-    gender: 'pl',
+    style: 'Honeycomb',
     make: () => {
       const size = 13;
       const r3 = Math.sqrt(3);
@@ -211,8 +199,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   bricks: {
-    noun: 'кладка',
-    gender: 'f',
+    style: 'Brick',
     make: (rng, seed) => {
       const bw = rng.pick([12, 16]);
       const bh = rng.pick([6, 8]);
@@ -227,8 +214,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   marble: {
-    noun: 'мрамор',
-    gender: 'm',
+    style: 'Marble',
     make: (rng, seed) => {
       const freq = rng.range(0.06, 0.1);
       const warp = rng.range(18, 30);
@@ -241,8 +227,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   starfield: {
-    noun: 'космос',
-    gender: 'm',
+    style: 'Starfield',
     make: (rng, seed) => {
       const cell = rng.range(30, 44);
       return (x, y) => {
@@ -258,8 +243,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   sunburst: {
-    noun: 'сияние',
-    gender: 'n',
+    style: 'Sunburst',
     make: (rng) => {
       const rays = rng.pick([8, 12]);
       return (x, y) => {
@@ -275,8 +259,7 @@ const PATTERNS: Record<string, PatternDef> = {
     },
   },
   rift: {
-    noun: 'разлом',
-    gender: 'm',
+    style: 'Rift',
     make: (rng) => {
       // Ячейки Вороного: трещины между ними светятся акцентом, как лава между плитами.
       const points = Array.from({ length: 10 }, () => [rng.range(0, MAT_WIDTH), rng.range(0, MAT_HEIGHT)] as const);
@@ -321,21 +304,26 @@ function darker(color: number): number {
  * всегда выглядит кляксой, а корона или пиковый туз читаются сразу.
  */
 const EMBLEMS: Record<string, string[]> = {
-  корона: ['#...#...#', '##.###.##', '#########', '#########', '#.#.#.#.#', '#########'],
-  звезда: ['....#....', '...###...', '#########', '.#######.', '..#####..', '..##.##..', '.##...##.'],
-  кристалл: ['..#####..', '.#######.', '#########', '.#######.', '..#####..', '...###...', '....#....'],
-  сердце: ['.##...##.', '####.####', '#########', '#########', '.#######.', '..#####..', '...###...', '....#....'],
-  кость: ['#########', '#.#####.#', '#########', '####.####', '#########', '#.#####.#', '#########'],
-  месяц: ['..####...', '.###.....', '###......', '###......', '###......', '.###.....', '..####...'],
-  пика: ['....#....', '...###...', '..#####..', '.#######.', '#########', '.##.#.##.', '....#....', '...###...'],
-  молния: ['....###', '...###.', '..###..', '.######', '...###.', '..###..', '.##....', '##.....'],
+  Crown: ['#...#...#', '##.###.##', '#########', '#########', '#.#.#.#.#', '#########'],
+  Star: ['....#....', '...###...', '#########', '.#######.', '..#####..', '..##.##..', '.##...##.'],
+  Crystal: ['..#####..', '.#######.', '#########', '.#######.', '..#####..', '...###...', '....#....'],
+  Heart: ['.##...##.', '####.####', '#########', '#########', '.#######.', '..#####..', '...###...', '....#....'],
+  Bone: ['#########', '#.#####.#', '#########', '####.####', '#########', '#.#####.#', '#########'],
+  Moon: ['..####...', '.###.....', '###......', '###......', '###......', '.###.....', '..####...'],
+  Spade: ['....#....', '...###...', '..#####..', '.#######.', '#########', '.##.#.##.', '....#....', '...###...'],
+  Bolt: ['....###', '...###.', '..###..', '.######', '...###.', '..###..', '.##....', '##.....'],
 };
 
 export interface MatSkin {
   image: PixelImage;
-  noun: string;
-  gender: Gender;
-  adjectives: [string, string, string, string];
+  color: string;
+  style: string;
+  /** Рамка: у обычного в тон, у редкого инкрустация акцентом, у эпического металл. */
+  frame: string;
+  /** Пунктирная строчка внутри рамки (у обычных и редких). */
+  stitched: boolean;
+  /** Эмблема-медальон в центре эпического коврика. */
+  emblem: string | null;
 }
 
 /** Коврик 128×96: фон-узор, виньетка, рамка по редкости, нитка цвета игрока, детали. */
@@ -365,8 +353,10 @@ export function generateMat(rng: Rng, seed: number, rarity: SkinRarity): MatSkin
     }
 
   // Эпический: металлический медальон в центре, с контуром и бликом слева сверху.
+  let emblem: string | null = null;
   if (rarity === 'epic') {
-    const mark = EMBLEMS[rng.pick(Object.keys(EMBLEMS))]!.map((row) => [...row].map((c) => c === '#'));
+    emblem = rng.pick(Object.keys(EMBLEMS));
+    const mark = EMBLEMS[emblem]!.map((row) => [...row].map((c) => c === '#'));
     const scale = 2;
     const ox = Math.round(MAT_WIDTH / 2 - (mark[0]!.length * scale) / 2);
     const oy = Math.round(MAT_HEIGHT / 2 - (mark.length * scale) / 2);
@@ -387,7 +377,7 @@ export function generateMat(rng: Rng, seed: number, rarity: SkinRarity): MatSkin
       }
   }
 
-  drawFrame(image, rng, rarity, frame);
+  const stitched = drawFrame(image, rng, rarity, frame);
 
   // Искры на эпическом: крестики на металле рамки и пара на поле.
   if (rarity === 'epic') {
@@ -398,7 +388,10 @@ export function generateMat(rng: Rng, seed: number, rarity: SkinRarity): MatSkin
     for (let i = 0; i < 3; i++) sparkle(image, rng.int(MAT_WIDTH - 30) + 15, rng.int(MAT_HEIGHT - 24) + 12);
   }
 
-  return { image, noun: def.noun, gender: def.gender, adjectives: palette.name };
+  const frameName = { common: 'Classic', rare: 'Inlay', epic: palette.metalName === 'gold' ? 'Gold' : 'Silver' }[
+    rarity
+  ];
+  return { image, color: palette.name, style: def.style, frame: frameName, stitched, emblem };
 }
 
 function sparkle(image: PixelImage, x: number, y: number) {
@@ -416,7 +409,8 @@ function sparkle(image: PixelImage, x: number, y: number) {
  * Рамка. Свет падает слева сверху: верх и левый край светлее, низ и правый темнее.
  * Сразу за контуром — нитка цвета игрока: по ней видно, чей коврик, при любом скине.
  */
-function drawFrame(image: PixelImage, rng: Rng, rarity: SkinRarity, width: number) {
+/** Рамка коврика. Возвращает, прошита ли она строчкой: это признак скина. */
+function drawFrame(image: PixelImage, rng: Rng, rarity: SkinRarity, width: number): boolean {
   const stitch = rarity !== 'epic' && rng.chance(0.6);
   for (let y = 0; y < MAT_HEIGHT; y++)
     for (let x = 0; x < MAT_WIDTH; x++) {
@@ -477,4 +471,5 @@ function drawFrame(image: PixelImage, rng: Rng, rarity: SkinRarity, width: numbe
           setPixel(image, x, y, color);
         }
   }
+  return stitch;
 }
