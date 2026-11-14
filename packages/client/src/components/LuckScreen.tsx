@@ -1,4 +1,4 @@
-import type { SkinView } from '@gamedeck/shared';
+import { generateSkin, type SkinView } from '@gamedeck/shared';
 import { useEffect, useState } from 'react';
 import { useT } from '../i18n';
 import { http } from '../lib/socket';
@@ -62,11 +62,18 @@ export function LuckScreen({
         <section className={`luck-prize skin-card--${prize.skin.rarity}`}>
           <span className="luck-prize__label">{t.luck.prize}</span>
           <SkinPreview skin={prize.skin} />
-          <b>{prize.skin.name}</b>
-          <span className="muted">
-            {t.skins.kinds[prize.skin.kind]} · {t.skins.rarities[prize.skin.rarity]} ·{' '}
-            {t.skins.serial(prize.skin.serial)}
-          </span>
+          <b>
+            {prize.skin.name} #{prize.skin.serial}
+          </b>
+          {/* Признаки, как атрибуты NFT: качество, цвет, стиль, рамка. Всегда по-английски, как и название. */}
+          <dl className="traits">
+            {generateSkin(prize.skin).traits.map(({ trait, value }) => (
+              <div key={trait}>
+                <dt>{trait}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
           <p className="muted">{mine ? t.luck.prizeFrom : t.luck.notYours}</p>
           {mine && (
             <div className="profile-links">

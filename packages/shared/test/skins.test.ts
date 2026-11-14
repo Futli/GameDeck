@@ -46,8 +46,25 @@ describe('генератор скинов', () => {
     }
   });
 
-  it('у каждого скина есть название по-русски', () => {
-    for (const ref of all) expect(generateSkin(ref).name).toMatch(/^[А-ЯЁ][а-яё]+ .+/);
+  it('название по одному правилу: цвет, стиль, вид — по-английски', () => {
+    for (const ref of all) {
+      const skin = generateSkin(ref);
+      expect(skin.name).toMatch(/^[A-Z][a-z]+ ([A-Z][A-Za-z-]+ )*(Mat|Dice|Cup)$/);
+      // Цвет из признаков открывает название, качество совпадает с редкостью.
+      const trait = (name: string) => skin.traits.find((t) => t.trait === name)?.value;
+      expect(skin.name.startsWith(`${trait('Color')} `)).toBe(true);
+      expect(trait('Quality')).toBe({ common: 'Common', rare: 'Rare', epic: 'Epic' }[ref.rarity]);
+    }
+  });
+
+  it('признаки как у NFT: у эпических металл рамки или кромки и эмблема коврика', () => {
+    const traitNames = (ref: (typeof all)[number]) => generateSkin(ref).traits.map((t) => t.trait);
+    for (const ref of all.filter((r) => r.rarity === 'epic')) {
+      const expected = { mat: ['Frame', 'Emblem'], dice: ['Edge'], cup: ['Trim'] }[ref.kind];
+      expect(traitNames(ref)).toEqual(expect.arrayContaining(expected));
+    }
+    for (const ref of all.filter((r) => r.rarity === 'common' && r.kind === 'mat'))
+      expect(traitNames(ref)).not.toContain('Emblem');
   });
 
   it('точки на кубике читаются на грани', () => {

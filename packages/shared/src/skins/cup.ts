@@ -28,21 +28,24 @@ const DECOR: Record<SkinRarity, Decor[]> = {
   rare: ['bands', 'dots', 'zigzag', 'checker', 'vstripes'],
   epic: ['royal', 'zigzag', 'dots'],
 };
-const DECOR_SUFFIX: Record<Decor, string> = {
-  plain: '',
-  leather: ' из кожи',
-  bands: ' с поясками',
-  vstripes: ' в полоску',
-  dots: ' в горошек',
-  zigzag: ' с зигзагом',
-  checker: ' в клетку',
-  royal: ' с гербом',
+/** Узор в названии и признаках скина: «Royal Crest Cup». */
+const DECOR_STYLE: Record<Decor, string> = {
+  plain: 'Plain',
+  leather: 'Leather',
+  bands: 'Banded',
+  vstripes: 'Striped',
+  dots: 'Polka Dot',
+  zigzag: 'Zigzag',
+  checker: 'Checkered',
+  royal: 'Crest',
 };
 
 export interface CupSkin {
   image: PixelImage;
-  adjectives: [string, string, string, string];
-  suffix: string;
+  color: string;
+  style: string;
+  /** Отделка: у эпического металл (Gold, Silver), у остальных цвет акцента. */
+  trim: string;
 }
 
 /**
@@ -139,5 +142,10 @@ export function generateCup(rng: Rng, seed: number, rarity: SkinRarity): CupSkin
       setPixel(image, x, y, c);
     setPixel(image, 4, 2, SPARKLE);
   }
-  return { image, adjectives: palette.name, suffix: DECOR_SUFFIX[decor] };
+  return {
+    image,
+    color: palette.name,
+    style: DECOR_STYLE[decor],
+    trim: rarity === 'epic' ? (palette.metalName === 'gold' ? 'Gold' : 'Silver') : 'Accent',
+  };
 }
