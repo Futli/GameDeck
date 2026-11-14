@@ -11,7 +11,7 @@ import {
   type WidgetDice,
   type WidgetRollBank,
 } from '@gamedeck/shared';
-import { and, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { matchPlayers, players, widgetPlayers } from '../db/schema.js';
 import { changeCoins, type Tx } from '../db/wallet.js';
@@ -73,6 +73,30 @@ export interface WidgetMessage {
   chatId: number;
   messageId: number;
   lang: BotLang;
+}
+
+/** Отправленный виджет и версия его HTML (null — отправлен до того, как версии начали записывать). */
+export interface SentWidget extends WidgetMessage {
+  version: string | null;
+}
+
+const sentWidgetColumns = {
+  playerId: widgetPlayers.playerId,
+  chatId: widgetPlayers.chatId,
+  messageId: widgetPlayers.messageId,
+  lang: widgetPlayers.lang,
+  version: widgetPlayers.widgetVersion,
+};
+
+function sentWidget(row: {
+  playerId: string;
+  chatId: number | null;
+  messageId: number | null;
+  lang: string | null;
+  version: string | null;
+}): SentWidget | null {
+  if (row.chatId === null || row.messageId === null) return null;
+  return { ...row, chatId: row.chatId, messageId: row.messageId, lang: row.lang === 'en' ? 'en' : 'ru' };
 }
 
 /**
@@ -213,20 +237,60 @@ export class WidgetService {
   }
 
   /** Последнее отправленное игроку сообщение с виджетом: бот удаляет его, когда присылает новый. */
-  async lastMessage(playerId: string): Promise<{ chatId: number; messageId: number } | null> {
+  async lastMessage(playerId: string): Promise<SentWidget | null> {
     const [row] = await this.db
-      .select({ chatId: widgetPlayers.chatId, messageId: widgetPlayers.messageId })
+      .select(sentWidgetColumns)
       .from(widgetPlayers)
       .where(eq(widgetPlayers.playerId, playerId));
-    return row?.chatId != null && row.messageId != null ? { chatId: row.chatId, messageId: row.messageId } : null;
+    return row ? sentWidget(row) : null;
   }
 
-  /** Запомнить сообщение с виджетом и его язык, чтобы потом обновлять его состояние. */
-  async rememberMessage(playerId: string, chatId: number, messageId: number, lang: BotLang = 'ru'): Promise<void> {
+  /**
+   * Запомнить сообщение с виджетом, его язык и версию HTML, чтобы потом обновлять его состояние
+   * и узнать, что после выката он устарел.
+   */
+  async rememberMessage(
+    playerId: string,
+    chatId: number,
+    messageId: number,
+    lang: BotLang = 'ru',
+    version: string | null = null,
+  ): Promise<void> {
+    const set = { chatId, messageId, lang, widgetVersion: version };
     await this.db
       .insert(widgetPlayers)
-      .values({ playerId, rolls: WIDGET_MAX_STORED_ROLLS, chatId, messageId, lang })
-      .onConflictDoUpdate({ target: widgetPlayers.playerId, set: { chatId, messageId, lang } });
+      .values({ playerId, rolls: WIDGET_MAX_STORED_ROLLS, ...set })
+      .onConflictDoUpdate({ target: widgetPlayers.playerId, set });
+  }
+
+  /** Виджеты, отправленные с другой версией HTML: после выката бот заменяет их свежими. */
+  async outdatedMessages(version: string): Promise<SentWidget[]> {
+    const rows = await this.db
+      .select(sentWidgetColumns)
+      .from(widgetPlayers)
+      .where(and(isNotNull(widgetPlayers.messageId), sql`${widgetPlayers.widgetVersion} is distinct from ${version}`));
+    return rows.map(sentWidget).filter((row) => row !== null);
+  }
+
+  /** Отметить, что устаревший виджет игрока уже обработан для этой версии, чтобы не трогать его снова. */
+  async markWidgetVersion(playerId: string, version: string): Promise<void> {
+    await this.db.update(widgetPlayers).set({ widgetVersion: version }).where(eq(widgetPlayers.playerId, playerId));
+  }
+
+  /** Какую версию кнопок под полем ввода игрок уже получил; 0 — никакую. */
+  async keyboardVersion(playerId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ version: widgetPlayers.keyboardVersion })
+      .from(widgetPlayers)
+      .where(eq(widgetPlayers.playerId, playerId));
+    return row?.version ?? 0;
+  }
+
+  async rememberKeyboard(playerId: string, version: number): Promise<void> {
+    await this.db
+      .insert(widgetPlayers)
+      .values({ playerId, rolls: WIDGET_MAX_STORED_ROLLS, keyboardVersion: version })
+      .onConflictDoUpdate({ target: widgetPlayers.playerId, set: { keyboardVersion: version } });
   }
 
   /**

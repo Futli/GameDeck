@@ -270,6 +270,13 @@ export const widgetPlayers = pgTable('widget_players', {
    * а подсказки в состоянии пишутся на языке виджета.
    */
   lang: text('lang'),
+  /**
+   * Версия HTML последнего виджета (WIDGET_VERSION). HTML отправленного виджета не меняется,
+   * поэтому после выката нового виджета бот находит устаревшие по этой версии и присылает свежие.
+   */
+  widgetVersion: text('widget_version'),
+  /** Какую версию кнопок под полем ввода (reply-клавиатуры) игрок уже получил; 0 — никакую. */
+  keyboardVersion: smallint('keyboard_version').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -12,10 +12,10 @@ import { PlayerService } from '../src/players/player-service.js';
 import { ShopService } from '../src/shop/shop-service.js';
 import { SkinService } from '../src/skins/skin-service.js';
 import { StatsService } from '../src/stats/stats-service.js';
-import type { BotApi } from '../src/widget/bot-api.js';
+import { BotApiError, type BotApi } from '../src/widget/bot-api.js';
 import { measureWidget, WIDGET_MAX_PACKED, type WidgetState } from '../src/widget/build.js';
 import { matFromSkin } from '../src/widget/mat.js';
-import { WidgetBot } from '../src/widget/widget-bot.js';
+import { WidgetBot, widgetVersion } from '../src/widget/widget-bot.js';
 import { REFERRAL_BONUS_ROLLS, REFERRAL_DAILY_LIMIT, WidgetService } from '../src/widget/widget-service.js';
 import { testDatabase } from './helpers.js';
 
@@ -369,10 +369,9 @@ describe('бот с виджетом', () => {
     });
 
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: user } });
-    // Первым бот спрашивает своё имя: оно нужно для реферальной ссылки.
-    expect(calls[0]!.method).toBe('getMe');
-    const sent = calls[1]!;
-    expect(sent.method).toBe('sendWidget');
+    // Новичку сначала приходят кнопки под полем ввода, потом бот спрашивает своё имя (для реферальной ссылки).
+    expect(calls.map((call) => call.method)).toEqual(['sendMessage', 'getMe', 'sendWidget']);
+    const sent = calls[2]!;
     expect(sent.params).toMatchObject({ chat_id: 5, allow_queries: true });
     expect(measureWidget(sent.params.html as string).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
     // «Найти игру» и «Позвать друга» — кнопки Telegram под столом; без inline-режима приглашение — «Поделиться».
@@ -394,7 +393,7 @@ describe('бот с виджетом', () => {
       update_id: 2,
       widget_query: { id: 'q1', from: user, chat: { id: 5 }, message_id: 42, data: 'r' },
     });
-    const [answer, edit] = calls.slice(2);
+    const [answer, edit] = calls.slice(3);
     expect(answer).toMatchObject({ method: 'answerWidgetQuery', params: { widget_query_id: 'q1' } });
     // Тройка — скин: «Подробнее» в окне приза ведёт в Mini App на страницу с этим скином.
     const [skin] = await skins.list(playerId);
@@ -476,6 +475,11 @@ describe('бот с виджетом', () => {
     const friendId = await players.ensureTelegramPlayer(friend);
     const [row] = await db.select().from(widgetPlayers).where(eq(widgetPlayers.playerId, friendId));
     expect(row!.referredBy).toBe(playerId);
+    // Переход по ссылке — это /start с параметром: друг сразу получает и кнопки, и виджет.
+    expect(calls.filter((call) => call.params.chat_id === 6).map((call) => call.method)).toEqual([
+      'sendMessage',
+      'sendWidget',
+    ]);
 
     calls.length = 0;
     await bot.handleUpdate({
@@ -508,7 +512,7 @@ describe('бот с виджетом', () => {
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: 5, type: 'private' }, from: english } });
     const sent = calls.find((c) => c.method === 'sendWidget')!;
     expect(sent.params.caption).toBe(
-      'Lucky Dice: roll the dice and collect coins. Widget gone? Send /dice to get a new one.',
+      'Lucky Dice: roll the dice and collect coins. Widget gone? Tap “🎲 Lucky Dice” to get a new one.',
     );
     expect(sent.params.html).not.toMatch(/[А-Яа-яЁё]/);
 
@@ -537,6 +541,104 @@ describe('бот с виджетом', () => {
     expect(calls.filter((call) => call.method === 'deleteMessage')).toEqual([
       { method: 'deleteMessage', params: { chat_id: 5, message_id: 41 } },
     ]);
+  });
+
+  it('кнопки под полем ввода приходят один раз, а «Позвать друга» присылает ссылку вместо виджета', async () => {
+    const { players, skins, widget, user, playerId } = await setup(diceRng(1, 2, 4));
+    const { api, calls } = fakeApi();
+    const bot = new WidgetBot({ api, players, skins, widget, appUrl: null, log, now: () => 1000 });
+    const say = (text: string, update_id = 1) =>
+      bot.handleUpdate({ update_id, message: { chat: { id: 5, type: 'private' }, from: user, text } });
+
+    await say('/start');
+    expect(calls[0]).toEqual({
+      method: 'sendMessage',
+      params: {
+        chat_id: 5,
+        text: expect.stringContaining('под полем ввода') as unknown,
+        disable_notification: true,
+        reply_markup: {
+          keyboard: [[{ text: '🎲 Кубик удачи' }, { text: '👋 Позвать друга' }]],
+          resize_keyboard: true,
+          is_persistent: true,
+        },
+      },
+    });
+    expect(calls.filter((call) => call.method === 'sendWidget')).toHaveLength(1);
+
+    // Telegram помнит клавиатуру в чате: второй раз она не приходит.
+    calls.length = 0;
+    await say('🎲 Кубик удачи');
+    expect(calls.map((call) => call.method)).toEqual(['sendWidget', 'deleteMessage']);
+
+    // Кнопка на любом из языков и команда /invite присылают личную ссылку, а виджет не трогают.
+    const referral = `https://t.me/example_bot?start=${await startOf(players, playerId)}`;
+    for (const text of ['👋 Позвать друга', '👋 Invite a friend', '/invite']) {
+      calls.length = 0;
+      await say(text);
+      expect(calls.map((call) => call.method)).toEqual(['sendMessage']);
+      expect(calls[0]!.params.text).toContain(referral);
+      expect(calls[0]!.params.reply_markup).toEqual({
+        inline_keyboard: [
+          [{ text: '👋 Позвать друга', url: `https://t.me/share/url?url=${encodeURIComponent(referral)}` }],
+        ],
+      });
+    }
+  });
+
+  it('после выката нового виджета заменяет устаревшие, а неудаляемым меняет подпись', async () => {
+    const { db, players, skins, widget, playerId } = await setup(diceRng(1, 2, 4));
+    // База общая на файл: виджеты из других тестов считаем свежими, чтобы видеть только свои.
+    await db.update(widgetPlayers).set({ widgetVersion: widgetVersion() });
+    const old = await players.ensureTelegramPlayer({ id: nextTelegramId++, first_name: 'Давний' });
+    const fresh = await players.ensureTelegramPlayer({ id: nextTelegramId++, first_name: 'Свежий' });
+    await widget.rememberMessage(playerId, 5, 41, 'ru', 'old-version');
+    // Виджет до появления версий (null) и старше 48 часов: удалить его Telegram не даст.
+    await widget.rememberMessage(old, 6, 30, 'en');
+    await widget.rememberMessage(fresh, 7, 50, 'ru', widgetVersion());
+
+    const { api, calls } = fakeApi();
+    let tooOften = true;
+    const telegram: BotApi = {
+      call: async <T>(method: string, params: Record<string, unknown>) => {
+        if (method === 'deleteMessage' && tooOften) {
+          tooOften = false;
+          calls.push({ method: '429', params });
+          throw new BotApiError(method, 429, 'Too Many Requests: retry after 0', 0);
+        }
+        if (method === 'deleteMessage' && params.message_id === 30) {
+          throw new BotApiError(method, 400, "Bad Request: message can't be deleted for everyone");
+        }
+        return api.call<T>(method, params);
+      },
+    };
+    const bot = new WidgetBot({
+      api: telegram,
+      players,
+      skins,
+      widget,
+      appUrl: null,
+      log,
+      now: () => 1000,
+      refreshPauseMs: 0,
+    });
+
+    expect(await bot.refreshOutdatedWidgets()).toEqual({ replaced: 1, captioned: 1 });
+    const byChat = (chat: number) => calls.filter((call) => call.params.chat_id === chat);
+    // Недавний виджет: сначала удалён (после паузы, о которой попросил Telegram), потом пришёл новый без звука.
+    expect(byChat(5).map((call) => call.method)).toEqual(['429', 'deleteMessage', 'sendWidget']);
+    expect(byChat(5)[2]!.params).toMatchObject({ disable_notification: true, caption: expect.any(String) as unknown });
+    // Давний виджет остаётся, но подпись подсказывает, как получить новый; кнопки под ним на месте.
+    expect(byChat(6).map((call) => call.method)).toEqual(['editMessageCaption']);
+    expect(byChat(6)[0]!.params.caption).toMatch(/^This table is outdated/);
+    expect(byChat(6)[0]!.params.reply_markup).toMatchObject({ inline_keyboard: [[{ text: '👋 Invite a friend' }]] });
+    expect(byChat(7)).toEqual([]);
+    expect(await widget.lastMessage(playerId)).toMatchObject({ messageId: 42, version: widgetVersion() });
+
+    // Второй старт с той же версией никого не трогает.
+    calls.length = 0;
+    expect(await bot.refreshOutdatedWidgets()).toEqual({ replaced: 0, captioned: 0 });
+    expect(calls).toEqual([]);
   });
 
   it('не отвечает в группах и отвечает ошибкой на незнакомый запрос', async () => {

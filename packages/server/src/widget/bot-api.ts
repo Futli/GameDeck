@@ -6,6 +6,8 @@ export class BotApiError extends Error {
     readonly method: string,
     readonly code: number,
     readonly description: string,
+    /** Для 429 «слишком часто»: сколько секунд Telegram просит подождать. */
+    readonly retryAfter?: number,
   ) {
     super(`Bot API ${method}: ${code} ${description}`);
   }
@@ -16,6 +18,7 @@ interface BotApiResponse<T> {
   result?: T;
   error_code?: number;
   description?: string;
+  parameters?: { retry_after?: number };
 }
 
 /** Вызов метода Bot API. Интерфейс, а не функция, чтобы тесты подставляли вместо Telegram запись вызовов. */
@@ -47,7 +50,12 @@ export function createBotApi(token: string, proxyUrl: string | null): BotApi {
       });
       const body = (await response.json()) as BotApiResponse<T>;
       if (!body.ok || body.result === undefined) {
-        throw new BotApiError(method, body.error_code ?? response.status, body.description ?? 'неизвестная ошибка');
+        throw new BotApiError(
+          method,
+          body.error_code ?? response.status,
+          body.description ?? 'неизвестная ошибка',
+          body.parameters?.retry_after,
+        );
       }
       return body.result;
     },
