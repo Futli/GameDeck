@@ -57,9 +57,24 @@ export type WidgetUiKey = keyof (typeof WIDGET_UI)['ru'];
 /** Фразы бота и ответов виджета, которые составляет сервер. */
 export const BOT_TEXTS = {
   ru: {
-    caption: 'Кубик удачи: бросьте кубики и заберите монеты. Пропал виджет? Команда /dice пришлёт новый.',
-    /** Команда в меню бота: присылает виджет заново, если игрок удалил сообщение с ним. */
+    caption: 'Кубик удачи: бросьте кубики и заберите монеты. Пропал виджет? Кнопка «🎲 Кубик удачи» пришлёт новый.',
+    /**
+     * Подпись устаревшего виджета, который бот уже не может удалить (старше 48 часов).
+     * Подпись меняется без уведомления, а свежий стол игрок попросит сам.
+     */
+    outdatedCaption:
+      'Этот стол устарел: вышла новая версия. Нажмите «🎲 Кубик удачи» под полем ввода, чтобы получить новый.',
+    /** Команды в меню бота «/». Те же действия — кнопки под полем ввода (keyboard). */
     diceCommand: 'Кубик удачи: прислать виджет',
+    inviteCommand: 'Позвать друга: ваша ссылка',
+    /** Кнопки под полем ввода (reply-клавиатура). Нажатие отправляет боту этот текст. */
+    keyboard: { dice: '🎲 Кубик удачи', invite: '👋 Позвать друга' },
+    /** Сообщение, с которым приходят кнопки под полем ввода: клавиатуру нельзя прицепить к виджету с кнопками. */
+    keyboardHello:
+      'Кнопки бота — под полем ввода: «🎲 Кубик удачи» присылает свежий виджет, «👋 Позвать друга» — вашу ссылку для друга.',
+    /** Ответ на «Позвать друга»: личная ссылка и кнопка, чтобы отправить её. */
+    inviteLink: (link: string) =>
+      `Ваша ссылка для друга:\n${link}\n\nКогда друг сделает первый бросок, вы оба получите по 3 броска.`,
     findGame: '🎲 Найти игру',
     outcome: { plain: '', pair: 'Пара, ×2! ', straight: 'Стрит! ', triple: 'Тройка, ×5! ' } as Record<
       WidgetRollOutcome,
@@ -96,8 +111,16 @@ export const BOT_TEXTS = {
     },
   },
   en: {
-    caption: 'Lucky Dice: roll the dice and collect coins. Widget gone? Send /dice to get a new one.',
+    caption: 'Lucky Dice: roll the dice and collect coins. Widget gone? Tap “🎲 Lucky Dice” to get a new one.',
+    outdatedCaption:
+      'This table is outdated: a new version is out. Tap “🎲 Lucky Dice” below the input field to get a new one.',
     diceCommand: 'Lucky Dice: send the widget',
+    inviteCommand: 'Invite a friend: your link',
+    keyboard: { dice: '🎲 Lucky Dice', invite: '👋 Invite a friend' },
+    keyboardHello:
+      'Bot buttons are below the input field: “🎲 Lucky Dice” sends a fresh widget, “👋 Invite a friend” gives your link for a friend.',
+    inviteLink: (link: string) =>
+      `Your link for a friend:\n${link}\n\nAfter your friend's first roll you both get 3 extra rolls.`,
     findGame: '🎲 Find a game',
     outcome: { plain: '', pair: 'Pair, ×2! ', straight: 'Straight! ', triple: 'Triple, ×5! ' },
     coins: (n: number) => `+${n} ${n === 1 ? 'coin' : 'coins'}`,
