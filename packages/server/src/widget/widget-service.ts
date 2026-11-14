@@ -20,6 +20,7 @@ import { changeCoins, type Tx } from '../db/wallet.js';
 import type { PlayerService } from '../players/player-service.js';
 import type { SkinService } from '../skins/skin-service.js';
 import { buildWidgetHtml, type WidgetRollAnswer, type WidgetState } from './build.js';
+import { diceFromSkin, diceFromStyle, flatDiceStyle } from './dice.js';
 import { cupFromSkin, defaultCup, feltMat, matFromSkin } from './mat.js';
 import { BOT_TEXTS, prizeText, type BotLang } from './texts.js';
 
@@ -136,22 +137,31 @@ export class WidgetService {
 
   /**
    * HTML виджета со скинами, надетыми на игроке, на языке lang. Один и тот же для чата с ботом
-   * и для главной Mini App. Надетый сгенерированный коврик рисуется тем же генератором, что и на столе;
-   * без него — сукно. Тесты держат любой коврик в 4 КБ виджета, но если генератор когда-нибудь
-   * выйдет за лимит, игрок получит виджет с сукном, а не ошибку: onFallback узнает, какой скин не влез.
+   * и для главной Mini App. Надетые сгенерированные коврик, кубики и стакан рисуются тем же
+   * генератором, что и на столе; без скина — сукно и двухцветные кубики из профиля.
+   *
+   * Всё вместе обязано сжаться в 4 КБ. Самые пёстрые эпические коврик, стакан и кубики разом
+   * туда не влезают, поэтому виджет упрощается по шагам: сначала кубики теряют текстуру
+   * и рисуются двумя цветами скина, потом коврик заменяется сукном. onFallback узнает, что упростили.
    */
-  async html(playerId: string, lang: BotLang, onFallback?: (error: unknown, mat: unknown) => void): Promise<string> {
+  async html(playerId: string, lang: BotLang, onFallback?: (error: unknown, skins: unknown) => void): Promise<string> {
     const equipped = await this.skins.equipped(playerId);
-    const dice = await this.players.diceStyle(playerId);
     const red = PLAYER_COLOR_HEX.red;
     const cup = equipped.cup ? cupFromSkin(generateSkin(equipped.cup).render(), red.main) : defaultCup(red);
-    try {
-      const mat = equipped.mat ? matFromSkin(generateSkin(equipped.mat).render(), red.main) : feltMat();
-      return buildWidgetHtml({ mat, dice, cup }, lang);
-    } catch (error) {
-      onFallback?.(error, equipped.mat);
-      return buildWidgetHtml({ mat: feltMat(), dice, cup }, lang);
+    const flatDice = diceFromStyle(
+      equipped.dice ? flatDiceStyle(equipped.dice) : await this.players.diceStyle(playerId),
+    );
+    const dice = equipped.dice ? diceFromSkin(equipped.dice) : flatDice;
+    const mat = () => (equipped.mat ? matFromSkin(generateSkin(equipped.mat).render(), red.main) : feltMat());
+    const attempts = [() => ({ mat: mat(), dice }), () => ({ mat: mat(), dice: flatDice })];
+    for (const attempt of attempts) {
+      try {
+        return buildWidgetHtml({ ...attempt(), cup }, lang);
+      } catch (error) {
+        onFallback?.(error, equipped);
+      }
     }
+    return buildWidgetHtml({ mat: feltMat(), dice: flatDice, cup }, lang);
   }
 
   /**

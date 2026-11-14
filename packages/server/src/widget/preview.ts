@@ -14,7 +14,9 @@ import {
   SKIN_RARITIES,
   WIDGET_ROLL_INTERVAL_SEC,
   generateSkin,
+  type SkinKind,
   type SkinRarity,
+  type SkinSeed,
 } from '@gamedeck/shared';
 import { cryptoRng } from '../app.js';
 import { config } from '../config.js';
@@ -24,7 +26,8 @@ import { PlayerService } from '../players/player-service.js';
 import { ShopService } from '../shop/shop-service.js';
 import { SkinService } from '../skins/skin-service.js';
 import { buildWidgetHtml, encodeWidgetState } from './build.js';
-import { defaultCup, feltMat, matFromSkin } from './mat.js';
+import { diceFromSkin, diceFromStyle } from './dice.js';
+import { cupFromSkin, defaultCup, feltMat, matFromSkin } from './mat.js';
 import { WidgetService } from './widget-service.js';
 
 const port = Number(process.env.WIDGET_PREVIEW_PORT ?? 5180);
@@ -32,15 +35,19 @@ const intervalSec = Number(process.env.WIDGET_ROLL_INTERVAL_SEC ?? WIDGET_ROLL_I
 const now = () => Math.floor(Date.now() / 1000);
 
 /**
- * Сгенерированный коврик вместо сукна: WIDGET_PREVIEW_MAT=epic:12345 (редкость:seed).
- * Так можно посмотреть любой скин в виджете, не выдавая его игроку.
+ * Сгенерированные скины вместо стандартных: WIDGET_PREVIEW_MAT=epic:12345 (редкость:seed),
+ * так же WIDGET_PREVIEW_DICE_SKIN и WIDGET_PREVIEW_CUP. Так можно посмотреть любой скин
+ * в виджете, не выдавая его игроку.
  */
-function previewMat() {
-  const [rarity, seed] = (process.env.WIDGET_PREVIEW_MAT ?? '').split(':');
-  if (!SKIN_RARITIES.includes(rarity as SkinRarity) || !seed) return feltMat();
-  const skin = generateSkin({ kind: 'mat', seed: Number(seed), rarity: rarity as SkinRarity });
-  return matFromSkin(skin.render(), PLAYER_COLOR_HEX.red.main);
+function previewSkin(kind: SkinKind, env: string | undefined): SkinSeed | null {
+  const [rarity, seed] = (env ?? '').split(':');
+  if (!SKIN_RARITIES.includes(rarity as SkinRarity) || !seed) return null;
+  return { kind, seed: Number(seed), rarity: rarity as SkinRarity };
 }
+const red = PLAYER_COLOR_HEX.red;
+const mat = previewSkin('mat', process.env.WIDGET_PREVIEW_MAT);
+const dice = previewSkin('dice', process.env.WIDGET_PREVIEW_DICE_SKIN);
+const cup = previewSkin('cup', process.env.WIDGET_PREVIEW_CUP);
 
 // Настоящий сервис бросков на базе в памяти: превью не расходится с ботом в правилах.
 const { db } = await openDatabase('memory://');
@@ -59,7 +66,11 @@ const { playerId } = await players.register();
 const modifiers = Number(process.env.WIDGET_PREVIEW_MODIFIERS ?? 0);
 if (modifiers > 0) await db.insert(widgetPlayers).values({ playerId, rolls: 3, modifiers });
 
-const html = buildWidgetHtml({ mat: previewMat(), dice: DEFAULT_DICE_STYLE, cup: defaultCup(PLAYER_COLOR_HEX.red) });
+const html = buildWidgetHtml({
+  mat: mat ? matFromSkin(generateSkin(mat).render(), red.main) : feltMat(),
+  dice: dice ? diceFromSkin(dice) : diceFromStyle(DEFAULT_DICE_STYLE),
+  cup: cup ? cupFromSkin(generateSkin(cup).render(), red.main) : defaultCup(red),
+});
 // «Подробнее» в окне приза: в превью ссылка никуда не ведёт, но кнопку видно.
 const appUrl = 'https://t.me/example_bot/play';
 

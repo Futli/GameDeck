@@ -66,13 +66,11 @@ L=['','4','08','048','0268','02468','036258'];
 // Рисовалка «пикселей»: один пиксель скина — k×k пикселей canvas.
 function px(i,k){var g=$(i).getContext('2d');return function(f,x,y,w,h){g.fillStyle=f;g.fillRect(x*k,y*k,w*k,h*k)}}
 // Картинка скина (коврик G.m, стакан G.k): строка «символ — номер цвета в палитре», w пикселей в строке.
-// По одному прямоугольнику на отрезок одинаковых пикселей. Прозрачный цвет палитры — #0000.
-function img(i,k,w,h,d){var r=px(i,k),x,y,j,o;for(y=0;y<h;y++)for(x=0;x<w;x=j){o=y*w;for(j=x+1;j<w&&d.s[o+j]==d.s[o+x];j++);r(d.p[parseInt(d.s[o+x],16)],x,y,j-x,1)}}
-// Три кубика на сетке 21×21, как в Die.tsx клиента. G.d: обводка, грань, блик, тень, точки, блик точки.
-function dice(a){var r=px('d',4),D=G.d;a.forEach(function(v,i){var o=i*24;
-r(D[0],o+1,0,19,21);r(D[0],o,1,21,19);r(D[1],o+2,1,17,19);r(D[1],o+1,2,19,17);
-r(D[2],o+2,1,16,1);r(D[2],o+1,2,1,16);r(D[3],o+3,19,16,1);r(D[3],o+19,3,1,16);
-L[v].split('').forEach(function(c){var x=o+4+5*(c%3),y=4+5*(c/3|0);r(D[4],x,y,3,3);r(D[5],x,y,1,1)})})}
+// По одному прямоугольнику на отрезок одинаковых пикселей. Прозрачный цвет палитры — #0000. X, Y — сдвиг на холсте.
+function img(i,k,w,h,d,X,Y){var r=px(i,k),x,y,j,o;for(y=0;y<h;y++)for(x=0;x<w;x=j){o=y*w;for(j=x+1;j<w&&d.s[o+j]==d.s[o+x];j++);r(d.p[parseInt(d.s[o+x],16)],(X|0)+x,(Y|0)+y,j-x,1)}}
+// Три кубика на сетке 21×21, как в Die.tsx клиента: G.d — пустая грань скина, G.e — точка 5×5 (см. widget/dice.ts).
+function dice(a){a.forEach(function(v,i){var o=i*24;img('d',4,21,21,G.d,o);
+L[v].split('').forEach(function(c){img('d',4,5,5,G.e,o+3+5*(c%3),3+5*(c/3|0))})})}
 // Время до следующего броска: 1:05:09 или 4:09.
 function tm(s){s=Math.max(0,s|0);var h=s/3600|0,m=s%3600/60|0,z=function(v){return(v<10?':0':':')+v};return(h?h+z(m):m)+z(s%60)}
 function say(t){$('o').textContent=t}

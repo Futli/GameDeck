@@ -1,5 +1,6 @@
 import { deflateSync } from 'node:zlib';
-import { diceShades, type DiceStyle, type WidgetDice, type WidgetRollOutcome } from '@gamedeck/shared';
+import type { WidgetDice, WidgetRollOutcome } from '@gamedeck/shared';
+import type { DiceSprite } from './dice.js';
 import { assertValidMat, type CupSprite, type MatSkin } from './mat.js';
 import { WIDGET_SOURCE } from './source.js';
 import { WIDGET_UI, type BotLang, type WidgetUiKey } from './texts.js';
@@ -18,7 +19,8 @@ const STATE_MAX_BYTES = 1024;
 /** Что надето на игроке: всё это видно в виджете. */
 export interface WidgetSkins {
   mat: MatSkin;
-  dice: DiceStyle;
+  /** Надетые кубики (diceFromSkin) или двухцветные (diceFromStyle). */
+  dice: DiceSprite;
   /** Надетый стакан (cupFromSkin) или стандартный цвета игрока (defaultCup). */
   cup: CupSprite;
 }
@@ -107,11 +109,11 @@ export function isWidgetLink(url: string): boolean {
 export function buildWidgetHtml(skins: WidgetSkins, lang: BotLang = 'ru'): string {
   assertValidMat(skins.mat);
 
-  const shades = diceShades(skins.dice);
   const config = {
     m: { p: skins.mat.palette, s: skins.mat.pixels },
     k: { p: skins.cup.palette, s: skins.cup.pixels },
-    d: [shades.outline, skins.dice.face, shades.light, shades.shade, skins.dice.pips, shades.pipLight],
+    d: { p: skins.dice.face.palette, s: skins.dice.face.pixels },
+    e: { p: skins.dice.pip.palette, s: skins.dice.pip.pixels },
   };
   // «</» внутри <script> закрыло бы тег, поэтому экранируем косую черту.
   const json = JSON.stringify(config).replaceAll('</', '<\\/');

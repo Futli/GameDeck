@@ -94,7 +94,8 @@
 Если генератор когда-нибудь выйдет за лимит, бот пришлёт виджет с сукном и запишет
 предупреждение в лог, а не упадёт.
 
-Посмотреть любой коврик в виджете: `WIDGET_PREVIEW_MAT=epic:12345 pnpm --filter @gamedeck/server widget:preview`.
+Посмотреть любые скины в виджете: `WIDGET_PREVIEW_MAT=epic:12345 WIDGET_PREVIEW_DICE_SKIN=rare:7 WIDGET_PREVIEW_CUP=epic:3 pnpm --filter @gamedeck/server widget:preview`.
+Надетые кубики виджет рисует пиксель в пиксель, а если эпическая тройка не влезает в 4 КБ — двумя цветами скина.
 
 `encodeImage`/`decodeImage` — запасной компактный формат строкой (`ширина:высота:палитра:серии`).
 

@@ -14,6 +14,7 @@ import { SkinService } from '../src/skins/skin-service.js';
 import { StatsService } from '../src/stats/stats-service.js';
 import { BotApiError, type BotApi } from '../src/widget/bot-api.js';
 import { measureWidget, WIDGET_MAX_PACKED, type WidgetState } from '../src/widget/build.js';
+import { diceFromSkin } from '../src/widget/dice.js';
 import { matFromSkin } from '../src/widget/mat.js';
 import { WidgetBot, widgetVersion } from '../src/widget/widget-bot.js';
 import { REFERRAL_BONUS_ROLLS, REFERRAL_DAILY_LIMIT, WidgetService } from '../src/widget/widget-service.js';
@@ -408,16 +409,19 @@ describe('бот с виджетом', () => {
     expect(JSON.parse(edit!.params.chat_data as string)).toMatchObject({ r: 2, b: 560, d: [4, 4, 4] });
   });
 
-  it('надетый сгенерированный коврик едет в виджет вместо сукна и влезает в лимит', async () => {
+  it('надетые сгенерированные коврик и кубики едут в виджет вместо стандартных и влезают в лимит', async () => {
     const { players, skins, widget, user, playerId } = await setup(diceRng(1, 2, 4));
     const mat = await skins.mint(playerId, 'mat', 'epic', { source: 'admin' });
+    const dice = await skins.mint(playerId, 'dice', 'rare', { source: 'admin' });
     await skins.equip(playerId, mat.id);
+    await skins.equip(playerId, dice.id);
     const { api, calls } = fakeApi();
     const bot = new WidgetBot({ api, players, skins, widget, appUrl: null, log, now: () => 1000 });
 
     await bot.handleUpdate({ update_id: 1, message: { chat: { id: 7, type: 'private' }, from: user } });
     const html = calls.find((call) => call.method === 'sendWidget')!.params.html as string;
     expect(html).toContain(matFromSkin(generateSkin(mat).render(), PLAYER_COLOR_HEX.red.main).pixels);
+    expect(html).toContain(diceFromSkin(dice).face.pixels);
     expect(measureWidget(html).packed).toBeLessThanOrEqual(WIDGET_MAX_PACKED);
   });
 
