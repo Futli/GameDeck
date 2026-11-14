@@ -32,7 +32,8 @@ export function RoomScreen({ room }: { room: RoomView }) {
   const rolling = room.status === 'playing' && (room.game?.awaiting.length ?? 0) > 0;
   const currentName = room.players.find((p) => p.id === room.game?.currentPlayerId)?.name;
 
-  const inviteLink = makeInviteLink(room.code, telegramAppUrl, myReferralCode);
+  // У комнаты с паролем он едет в ссылке: друг войдёт, не вводя его.
+  const inviteLink = makeInviteLink(room.code, telegramAppUrl, myReferralCode, room.invitePassword);
   const copyInvite = async () => {
     // В Telegram — системное «Поделиться»: выбрать чат и отправить ссылку.
     if (tg && telegramAppUrl) return shareInvite(inviteLink, t.room.shareText(room.code));

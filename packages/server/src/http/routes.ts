@@ -7,6 +7,8 @@ import type { RoomManager } from '../rooms/room-manager.js';
 import type { ShopService } from '../shop/shop-service.js';
 import type { SkinService } from '../skins/skin-service.js';
 import type { StatsService } from '../stats/stats-service.js';
+import { encodeWidgetState } from '../widget/build.js';
+import type { WidgetMessage, WidgetService } from '../widget/widget-service.js';
 
 export interface HttpDeps {
   rooms: RoomManager;
@@ -14,7 +16,12 @@ export interface HttpDeps {
   stats: StatsService;
   shop: ShopService;
   skins: SkinService;
+  widget: WidgetService;
   telegramAppUrl: string | null;
+  /** Бот присылает виджет в чат (TELEGRAM_CHAT_WIDGET): клиент показывает «Открыть виджет в чате». */
+  chatWidget: boolean;
+  /** Первый бросок приглашённого в Mini App принёс награду пригласившему: бот обновит его виджет. */
+  onReferrerRewarded?: (referrer: WidgetMessage) => void;
 }
 
 const itemBodySchema = z.object({ itemId: z.string().min(1) });
@@ -25,6 +32,11 @@ const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   before: z.iso.datetime().optional(),
 });
+const widgetLangSchema = z.enum(['ru', 'en']);
+const widgetQuerySchema = z.object({ lang: widgetLangSchema });
+const widgetBodySchema = z.object({ d: z.string().max(64), lang: widgetLangSchema });
+const now = () => Math.floor(Date.now() / 1000);
+
 const leaderboardQuerySchema = z.object({
   game: z.enum(Object.keys(games) as [string, ...string[]]).default('dice-high'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -35,7 +47,7 @@ const leaderboardQuerySchema = z.object({
  * проверка «жив ли сервер», превью комнаты, профили, рейтинг и магазин.
  */
 export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
-  const { rooms, players, stats, shop, skins } = deps;
+  const { rooms, players, stats, shop, skins, widget } = deps;
 
   // Ошибки приложения и zod → понятный JSON с кодом, остальное — 500.
   app.setErrorHandler((err, _request, reply) => {
@@ -62,7 +74,7 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
   /** Список комнат для главной: сначала без пароля, потом с паролем. */
   app.get('/api/rooms', async () => ({ rooms: rooms.list() }));
   /** Настройки, которые клиент узнаёт при старте. Так один и тот же образ работает с любым ботом. */
-  app.get('/api/config', async () => ({ telegramAppUrl: deps.telegramAppUrl }));
+  app.get('/api/config', async () => ({ telegramAppUrl: deps.telegramAppUrl, chatWidget: deps.chatWidget }));
 
   app.get<{ Params: { code: string } }>('/api/rooms/:code', async (request, reply) => {
     const parsed = roomCodeSchema.safeParse(request.params.code);
@@ -102,6 +114,36 @@ export function registerHttpRoutes(app: FastifyInstance, deps: HttpDeps): void {
     const playerId = await requirePlayer(request);
     const { limit, before } = historyQuerySchema.parse(request.query);
     return stats.history(playerId, { limit, ...(before ? { before: new Date(before) } : {}) });
+  });
+
+  // ─── Виджет «Кубик удачи» на главной Mini App ─────────────
+  // Тот же HTML, что бот присылает в чат, и те же броски. Клиент вставляет его во фрейм и подменяет
+  // window.TelegramWidget: запрос броска вместо бота идёт сюда, а chatData — это то же состояние.
+
+  app.get('/api/me/widget', async (request) => {
+    const playerId = await requirePlayer(request);
+    const { lang } = widgetQuerySchema.parse(request.query);
+    const html = await widget.html(playerId, lang, (error, skin) =>
+      request.log.warn({ err: error, skin }, 'skin mat does not fit the widget, falling back to felt'),
+    );
+    return { html, chatData: encodeWidgetState(await widget.state(playerId, now(), lang)) };
+  });
+
+  app.post('/api/me/widget/query', async (request) => {
+    const playerId = await requirePlayer(request);
+    const { d, lang } = widgetBodySchema.parse(request.body);
+    // «Подробнее» в окне приза: в чате это ссылка на Mini App, а здесь — сам параметр (luck или
+    // luck-<id скина>), клиент откроет страницу «Кубик удачи» без перехода по ссылке.
+    const { details, ...answer } = { details: undefined, ...(await widget.answer(playerId, d, now(), lang)) };
+    // Первый бросок приглашённого приносит бонусные броски ему и пригласившему, как и в чате.
+    if (d === 'r' && !('e' in answer)) {
+      const referrer = await widget.claimReferral(playerId, now());
+      if (referrer) deps.onReferrerRewarded?.(referrer);
+    }
+    return {
+      result: JSON.stringify(details ? { ...answer, l: details } : answer),
+      chatData: encodeWidgetState(await widget.state(playerId, now(), lang)),
+    };
   });
 
   app.get('/api/leaderboard', async (request) => {

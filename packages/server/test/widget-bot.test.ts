@@ -641,6 +641,49 @@ describe('бот с виджетом', () => {
     expect(calls).toEqual([]);
   });
 
+  it('с выключенным виджетом в чате ведёт в Mini App и не трогает старые виджеты', async () => {
+    const { players, skins, widget, user, playerId } = await setup(diceRng(1, 3, 5));
+    const { api, calls } = fakeApi();
+    const bot = new WidgetBot({
+      api,
+      players,
+      skins,
+      widget,
+      appUrl: 'https://t.me/example_bot/play',
+      chatWidget: false,
+      log,
+      now: () => 1000,
+    });
+
+    for (const [id, text] of [
+      [1, '/start'],
+      [2, '/dice'],
+      [3, '🎲 Кубик удачи'],
+    ] as const) {
+      await bot.handleUpdate({ update_id: id, message: { chat: { id: 5, type: 'private' }, from: user, text } });
+    }
+    expect(calls.map((call) => call.method)).not.toContain('sendWidget');
+    // Первое — кнопки под полем ввода, дальше на каждую просьбу — кнопка «Бросить кубики» в Mini App.
+    const answers = calls.filter((call) => call.method === 'sendMessage').slice(1);
+    expect(answers).toHaveLength(3);
+    expect(answers[0]!.params.reply_markup).toEqual({
+      inline_keyboard: [[{ text: '🎲 Бросить кубики', url: 'https://t.me/example_bot/play?startapp=luck' }]],
+    });
+
+    // «Позвать друга» работает как раньше.
+    calls.length = 0;
+    await bot.handleUpdate({
+      update_id: 4,
+      message: { chat: { id: 5, type: 'private' }, from: user, text: '/invite' },
+    });
+    expect(calls.at(-1)!.params.text).toContain(await startOf(players, playerId));
+
+    // Пригласившему виджет не обновляется: его нет в чате.
+    calls.length = 0;
+    await bot.refreshReferrerWidget({ playerId, chatId: 5, messageId: 42, lang: 'ru' });
+    expect(calls).toEqual([]);
+  });
+
   it('не отвечает в группах и отвечает ошибкой на незнакомый запрос', async () => {
     const { players, skins, widget, user } = await setup(diceRng(1, 2, 4));
     const { api, calls } = fakeApi();

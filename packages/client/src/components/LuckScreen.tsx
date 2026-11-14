@@ -7,7 +7,7 @@ import { luckChatLink, openTelegramLink } from '../lib/telegram';
 import { SkinPreview } from './SkinsScreen';
 
 /**
- * «Кубик удачи» внутри Mini App: сюда ведёт «Подробнее» из окна приза в виджете.
+ * Призы и правила «Кубика удачи»: сюда ведёт «Подробнее» из окна приза в виджете (на главной или в чате).
  * С выпавшим скином (skinId) — сначала его карточка с кнопкой «Надеть», дальше правила,
  * таблица призов и модификаторы: что они делают и как ими пользоваться.
  */
@@ -23,9 +23,11 @@ export function LuckScreen({
   const t = useT();
   const profile = useClientState((s) => s.profile);
   const telegramAppUrl = useClientState((s) => s.telegramAppUrl);
+  // Кнопка «Открыть виджет в чате» — только когда бот его туда присылает (TELEGRAM_CHAT_WIDGET).
+  const chatWidget = useClientState((s) => s.chatWidget);
   const [prize, setPrize] = useState<{ skin: SkinView; ownerId: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const chat = luckChatLink(telegramAppUrl);
+  const chat = chatWidget ? luckChatLink(telegramAppUrl) : null;
 
   useEffect(() => {
     if (!skinId) return;

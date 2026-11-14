@@ -11,8 +11,8 @@ export const config = {
    * Любой другой путь — встроенный PGlite с файлами в этой папке (ничего не нужно ставить).
    */
   databaseUrl: process.env.DATABASE_URL ?? './data/pglite',
-  /** Сколько монет получает новый игрок. */
-  startingCoins: Number(process.env.STARTING_COINS ?? 500),
+  /** Сколько монет получает новый игрок. Уже зарегистрированных не касается. */
+  startingCoins: Number(process.env.STARTING_COINS ?? 0),
   logLevel: process.env.LOG_LEVEL ?? 'info',
   /**
    * Токен бота от @BotFather. Им проверяется подпись initData, это чистая математика без сети.
@@ -28,6 +28,12 @@ export const config = {
    * Для этого нужен доступ к api.telegram.org, из России — через telegramProxyUrl.
    */
   telegramBotPolling: process.env.TELEGRAM_BOT_POLLING === '1',
+  /**
+   * «0» — бот не присылает виджет «Кубик удачи» в чат (Telegram может временно отключить виджеты)
+   * и не заменяет старые виджеты после выката. На /start, /dice и «🎲 Кубик удачи» бот отвечает
+   * кнопкой в Mini App, где тот же виджет стоит на главной. По умолчанию виджет в чате включён.
+   */
+  telegramChatWidget: process.env.TELEGRAM_CHAT_WIDGET !== '0',
   /** HTTP-прокси для запросов к api.telegram.org, например http://xray:8118. Пусто — напрямую. */
   telegramProxyUrl: process.env.TELEGRAM_PROXY_URL || null,
   /** Раз в сколько секунд игроку приходит бросок в виджете. Меньше трёх часов — только для проверки. */

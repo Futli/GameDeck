@@ -58,27 +58,27 @@ describe('RoomManager', () => {
     expect(() => rooms.join(carol, room.code, 'secret')).toThrow('Комната заполнена');
     expect(room.toView().settings.hasPassword).toBe(true);
     expect(JSON.stringify(room.toView())).not.toContain('secret');
+    // Сидящим в комнате пароль приходит для ссылки-приглашения, постороннему — нет.
+    expect(room.toView('bob').invitePassword).toBe('secret');
+    expect(room.toView('carol').invitePassword).toBeNull();
   });
 
-  it('список комнат: сначала без пароля, потом с паролем; пароль наружу не уходит', () => {
+  it('список комнат: комнат с паролем в нём нет', () => {
     const rooms = new RoomManager();
-    const locked = rooms.create(alice, { password: 'secret' });
+    rooms.create(alice, { password: 'secret' });
     const open = rooms.create(bob);
-    rooms.create(carol, { password: '' }); // пустой пароль = открытая комната
+    const empty = rooms.create(carol, { password: '' }); // пустой пароль = открытая комната
     const list = rooms.list();
-    expect(list.map((r) => r.hasPassword)).toEqual([false, false, true]);
-    expect(list.at(-1)).toEqual({
-      code: locked.code,
+    expect(list.map((r) => r.code).sort()).toEqual([open.code, empty.code].sort());
+    expect(list.find((r) => r.code === open.code)).toEqual({
+      code: open.code,
       status: 'lobby',
       gameId: 'dice-high',
       stake: 0,
-      hasPassword: true,
-      hostName: 'Алиса',
+      hostName: 'Боб',
       players: 1,
       maxPlayers: 6,
     });
-    expect(JSON.stringify(list)).not.toContain('secret');
-    expect(list.map((r) => r.code)).toContain(open.code);
   });
 
   it('хост уходит — хостом становится следующий; пустая комната удаляется', () => {

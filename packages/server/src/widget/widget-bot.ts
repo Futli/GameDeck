@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
-import { DEFAULT_DICE_STYLE, PLAYER_COLOR_HEX, generateSkin, referralStartParam } from '@gamedeck/shared';
+import { DEFAULT_DICE_STYLE, PLAYER_COLOR_HEX, referralStartParam } from '@gamedeck/shared';
 import type { PlayerService } from '../players/player-service.js';
 import type { SkinService } from '../skins/skin-service.js';
 import { BotApiError, type BotApi } from './bot-api.js';
 import { buildWidgetHtml, encodeWidgetState, isWidgetLink, type WidgetRollAnswer } from './build.js';
-import { cupFromSkin, defaultCup, feltMat, matFromSkin } from './mat.js';
+import { defaultCup, feltMat } from './mat.js';
 import { botLang, BOT_TEXTS, type BotLang } from './texts.js';
 import type { SentWidget, WidgetMessage, WidgetService } from './widget-service.js';
 
@@ -55,6 +55,11 @@ interface WidgetBotOptions {
   now?: () => number;
   /** Пауза между игроками при замене устаревших виджетов; тесты ставят 0. */
   refreshPauseMs?: number;
+  /**
+   * Присылать ли виджет в чат (TELEGRAM_CHAT_WIDGET). false — Telegram отключил виджеты: бот не шлёт
+   * и не заменяет их, а на просьбу о «Кубике удачи» отвечает кнопкой в Mini App. По умолчанию true.
+   */
+  chatWidget?: boolean;
 }
 
 /** Пауза между попытками, когда Telegram недоступен: растёт от 3 секунд до минуты. */
@@ -116,10 +121,12 @@ export class WidgetBot {
   private stopping = false;
   private readonly now: () => number;
   private readonly refreshPauseMs: number;
+  private readonly chatWidget: boolean;
 
   constructor(private readonly options: WidgetBotOptions) {
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
     this.refreshPauseMs = options.refreshPauseMs ?? REFRESH_PAUSE_MS;
+    this.chatWidget = options.chatWidget ?? true;
   }
 
   /** Запустить опрос в фоне. Ошибки сети не роняют сервер: бот ждёт и пробует снова. */
@@ -146,10 +153,13 @@ export class WidgetBot {
         if (this.info === null) {
           log.info({ bot: (await this.botInfo()).url }, 'widget bot started');
           await this.setCommands();
-          // В фоне: опрос не ждёт, пока бот обойдёт всех игроков.
-          void this.refreshOutdatedWidgets().catch((error: unknown) => {
-            log.error({ err: error }, 'widget bot: outdated widgets were not refreshed');
-          });
+          // В фоне: опрос не ждёт, пока бот обойдёт всех игроков. Виджеты в чате выключены — заменять нечего:
+          // новый виджет всё равно не дойдёт, а старый игрок увидит в Mini App.
+          if (this.chatWidget) {
+            void this.refreshOutdatedWidgets().catch((error: unknown) => {
+              log.error({ err: error }, 'widget bot: outdated widgets were not refreshed');
+            });
+          }
         }
         // timeout 5 секунд, а не 25: при остановке сервера не приходится долго ждать ответа.
         const updates = await api.call<unknown[]>('getUpdates', { offset, timeout: 5 }, 15_000);
@@ -196,7 +206,7 @@ export class WidgetBot {
       await this.options.api
         .call('setMyCommands', {
           commands: [
-            { command: 'dice', description: BOT_TEXTS[lang].diceCommand },
+            { command: 'dice', description: this.chatWidget ? BOT_TEXTS[lang].diceCommand : BOT_TEXTS[lang].diceInApp },
             { command: 'invite', description: BOT_TEXTS[lang].inviteCommand },
           ],
           ...(lang === 'ru' ? { language_code: 'ru' } : {}),
@@ -245,7 +255,24 @@ export class WidgetBot {
 
     await this.ensureKeyboard(playerId, message.chat.id, lang);
     if (isInviteRequest(text)) await this.sendInvite(playerId, message.chat.id, lang);
-    else await this.sendWidget(playerId, message.chat.id, lang);
+    else if (this.chatWidget) await this.sendWidget(playerId, message.chat.id, lang);
+    else await this.sendLuckInApp(message.chat.id, lang);
+  }
+
+  /**
+   * Виджеты в чате выключены (TELEGRAM_CHAT_WIDGET=0): вместо стола — кнопка, которая открывает Mini App.
+   * Там на главной тот же виджет. Без адреса Mini App (TELEGRAM_APP_URL) — только текст.
+   */
+  private async sendLuckInApp(chatId: number, lang: BotLang): Promise<void> {
+    const { api, appUrl } = this.options;
+    const t = BOT_TEXTS[lang];
+    await api.call('sendMessage', {
+      chat_id: chatId,
+      text: t.luckInApp,
+      ...(appUrl
+        ? { reply_markup: { inline_keyboard: [[{ text: t.openLuck, url: `${appUrl}?startapp=luck` }]] } }
+        : {}),
+    });
   }
 
   /**
@@ -326,26 +353,11 @@ export class WidgetBot {
     lang: BotLang,
     { silent = false, keepPrevious = false } = {},
   ): Promise<void> {
-    const { api, players, skins, widget } = this.options;
+    const { api, widget, log } = this.options;
     // HTML у отправленного виджета не меняется, поэтому скины подставляются в момент отправки.
-    // Надетый сгенерированный коврик рисуется тем же генератором, что и на столе; без него — сукно.
-    // Тесты держат любой коврик в 4 КБ виджета, но если генератор когда-нибудь выйдет за лимит,
-    // игрок получит виджет с сукном, а не ошибку.
-    const equipped = await skins.equipped(playerId);
-    const dice = await players.diceStyle(playerId);
-    const red = PLAYER_COLOR_HEX.red;
-    const cup = equipped.cup ? cupFromSkin(generateSkin(equipped.cup).render(), red.main) : defaultCup(red);
-    let html: string;
-    try {
-      const mat = equipped.mat ? matFromSkin(generateSkin(equipped.mat).render(), red.main) : feltMat();
-      html = buildWidgetHtml({ mat, dice, cup }, lang);
-    } catch (error) {
-      this.options.log.warn(
-        { err: error, skin: equipped.mat },
-        'skin mat does not fit the widget, falling back to felt',
-      );
-      html = buildWidgetHtml({ mat: feltMat(), dice, cup }, lang);
-    }
+    const html = await widget.html(playerId, lang, (error, skin) =>
+      log.warn({ err: error, skin }, 'skin mat does not fit the widget, falling back to felt'),
+    );
 
     const previous = keepPrevious ? null : await widget.lastMessage(playerId);
     const sent = await api.call<{ message_id: number }>('sendWidget', {
@@ -484,14 +496,13 @@ export class WidgetBot {
 
     let answer: WidgetRollAnswer | { e: 'FAILED' } = { e: 'FAILED' };
     try {
-      // «r» — бросок, «m0»–«m2» — переброс кубика с этим номером.
-      const reroll = /^m([0-2])$/.exec(query.data);
-      if (query.data === 'r') {
-        // «Подробнее» в окне приза ведёт в Mini App: сервис говорит куда, ссылку собирает бот.
-        const { details, ...rolled } = await widget.roll(playerId, this.now(), lang);
-        const link = details && this.options.appUrl ? `${this.options.appUrl}?startapp=${details}` : null;
-        answer = link && isWidgetLink(link) ? { ...rolled, l: link } : rolled;
-      } else if (reroll) answer = await widget.reroll(playerId, Number(reroll[1]), this.now(), lang);
+      // «Подробнее» в окне приза ведёт в Mini App: сервис говорит куда, ссылку собирает бот.
+      const { details, ...result } = {
+        details: undefined,
+        ...(await widget.answer(playerId, query.data, this.now(), lang)),
+      };
+      const link = details && this.options.appUrl ? `${this.options.appUrl}?startapp=${details}` : null;
+      answer = link && isWidgetLink(link) ? { ...result, l: link } : result;
     } finally {
       await api.call('answerWidgetQuery', { widget_query_id: query.id, data: JSON.stringify(answer) });
     }
@@ -523,6 +534,8 @@ export class WidgetBot {
    * первой партии друга за столом.
    */
   async refreshReferrerWidget(referrer: WidgetMessage): Promise<void> {
+    // Виджеты в чате выключены: награду пригласивший увидит в Mini App.
+    if (!this.chatWidget) return;
     await this.options.api
       .call('editMessageWidgetData', {
         chat_id: referrer.chatId,

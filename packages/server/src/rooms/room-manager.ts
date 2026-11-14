@@ -34,22 +34,17 @@ export class RoomManager {
   }
 
   /**
-   * Список комнат для главной. Сначала без пароля, потом с паролем; внутри
-   * каждой группы — сначала те, куда можно войти прямо сейчас (лобби, есть места),
+   * Список комнат для главной. Комнаты с паролем в него не попадают: в них входят по коду
+   * или по ссылке-приглашению. Сначала те, куда можно войти прямо сейчас (лобби, есть места),
    * затем более полные, затем с идущей игрой.
    */
   list(): RoomSummary[] {
     const rank = (r: RoomSummary) =>
       r.status !== 'playing' && r.players < r.maxPlayers ? 0 : r.status === 'playing' ? 2 : 1;
     return [...this.rooms.values()]
+      .filter((room) => !room.isPrivate)
       .map((room) => room.toSummary())
-      .sort(
-        (a, b) =>
-          Number(a.hasPassword) - Number(b.hasPassword) ||
-          rank(a) - rank(b) ||
-          b.players - a.players ||
-          a.code.localeCompare(b.code),
-      );
+      .sort((a, b) => rank(a) - rank(b) || b.players - a.players || a.code.localeCompare(b.code));
   }
 
   create(player: PlayerInfo, settings?: Partial<RoomSettings>): Room {

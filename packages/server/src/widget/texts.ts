@@ -66,12 +66,17 @@ export const BOT_TEXTS = {
       'Этот стол устарел: вышла новая версия. Нажмите «🎲 Кубик удачи» под полем ввода, чтобы получить новый.',
     /** Команды в меню бота «/». Те же действия — кнопки под полем ввода (keyboard). */
     diceCommand: 'Кубик удачи: прислать виджет',
+    /** Команда /dice, когда виджеты в чате выключены (TELEGRAM_CHAT_WIDGET=0): кубик в Mini App. */
+    diceInApp: 'Кубик удачи: открыть в приложении',
+    /** Ответ на /start, /dice и «🎲 Кубик удачи», когда виджеты в чате выключены. */
+    luckInApp: '🎲 Кубик удачи теперь в приложении: бросайте кубики прямо на главной, монеты и скины те же.',
+    openLuck: '🎲 Бросить кубики',
     inviteCommand: 'Позвать друга: ваша ссылка',
     /** Кнопки под полем ввода (reply-клавиатура). Нажатие отправляет боту этот текст. */
     keyboard: { dice: '🎲 Кубик удачи', invite: '👋 Позвать друга' },
     /** Сообщение, с которым приходят кнопки под полем ввода: клавиатуру нельзя прицепить к виджету с кнопками. */
     keyboardHello:
-      'Кнопки бота — под полем ввода: «🎲 Кубик удачи» присылает свежий виджет, «👋 Позвать друга» — вашу ссылку для друга.',
+      'Кнопки бота — под полем ввода: «🎲 Кубик удачи» — бросить кубики, «👋 Позвать друга» — ваша ссылка для друга.',
     /** Ответ на «Позвать друга»: личная ссылка и кнопка, чтобы отправить её. */
     inviteLink: (link: string) =>
       `Ваша ссылка для друга:\n${link}\n\nКогда друг сделает первый бросок, вы оба получите по 3 броска.`,
@@ -115,10 +120,13 @@ export const BOT_TEXTS = {
     outdatedCaption:
       'This table is outdated: a new version is out. Tap “🎲 Lucky Dice” below the input field to get a new one.',
     diceCommand: 'Lucky Dice: send the widget',
+    diceInApp: 'Lucky Dice: open in the app',
+    luckInApp: '🎲 Lucky Dice is in the app now: roll the dice right on the home screen, same coins and skins.',
+    openLuck: '🎲 Roll the dice',
     inviteCommand: 'Invite a friend: your link',
     keyboard: { dice: '🎲 Lucky Dice', invite: '👋 Invite a friend' },
     keyboardHello:
-      'Bot buttons are below the input field: “🎲 Lucky Dice” sends a fresh widget, “👋 Invite a friend” gives your link for a friend.',
+      'Bot buttons are below the input field: “🎲 Lucky Dice” to roll the dice, “👋 Invite a friend” for your link for a friend.',
     inviteLink: (link: string) =>
       `Your link for a friend:\n${link}\n\nAfter your friend's first roll you both get 3 extra rolls.`,
     findGame: '🎲 Find a game',

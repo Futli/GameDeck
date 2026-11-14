@@ -1,182 +1,134 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/socket';
-import { GamePicker, loadGameChoice, saveGameChoice } from './GamePicker';
-import { RoomList } from './RoomList';
+import { adoptProfileName, getPlayerName } from '../lib/name';
 import { useClientState } from '../lib/store';
-import { Avatar } from './Avatar';
-import { ProfileStats } from './ProfileCard';
+import { inviteFor, invitePasswordFor, linkRoomCode, startLuck } from '../lib/telegram';
+import { useT } from '../i18n';
+import { GameCards } from './GamePicker';
+import { fetchRoom, GameScreen } from './GameScreen';
+import { SettingsIcon, SkinsIcon, StatsIcon } from './Icons';
 import { LuckScreen } from './LuckScreen';
+import { LuckWidget } from './LuckWidget';
+import { SettingsScreen } from './SettingsScreen';
 import { SkinsScreen } from './SkinsScreen';
 import { StatsScreen } from './StatsScreen';
-import { inviteFor, linkRoomCode, startLuck, startRoomCode, telegramName, telegramUser } from '../lib/telegram';
-import { useT } from '../i18n';
-import { LanguageSwitch } from './LanguageSwitch';
 
-const NAME_KEY = 'gamedeck.name';
-
-/** Пришли по приглашению из Telegram — сразу садимся за стол. Один раз, даже в StrictMode. */
+/** Пришли по приглашению — сразу садимся за стол. Один раз, даже в StrictMode. */
 let autoJoinDone = false;
 
+/**
+ * Где игрок вне комнаты: главная, экран выбранной игры или раздел из правого верхнего угла.
+ * На «Кубик удачи» ведёт «Подробнее» из окна приза (в виджете на главной или в чате с ботом).
+ */
+type Screen =
+  | { name: 'main' }
+  | { name: 'game'; gameId: string }
+  | { name: 'luck'; skinId: string | null }
+  | { name: 'skins' }
+  | { name: 'stats' }
+  | { name: 'settings' };
+
 export function Lobby() {
-  // В Telegram ник по умолчанию — из профиля Telegram; игрок может его поменять.
-  const [name, setName] = useState(() => telegramName ?? localStorage.getItem(NAME_KEY) ?? '');
-  const [code, setCode] = useState(linkRoomCode);
-  const [password, setPassword] = useState('');
-  const [needsPassword, setNeedsPassword] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [gameId, setGameId] = useState(loadGameChoice);
-  const [busy, setBusy] = useState(false);
-  /**
-   * Главная или один из разделов профиля поверх неё. Набранные имя и код при этом не теряются.
-   * Из окна приза в виджете «Кубик удачи» приходят сразу на его страницу.
-   */
-  const [screen, setScreen] = useState<'main' | 'skins' | 'stats' | 'luck'>(startLuck ? 'luck' : 'main');
+  const [screen, setScreen] = useState<Screen>(
+    startLuck ? { name: 'luck', skinId: startLuck.skinId } : { name: 'main' },
+  );
   const profile = useClientState((s) => s.profile);
-  const nameEdited = useRef(false);
   const t = useT();
+  const home = () => setScreen({ name: 'main' });
+  const openLuck = useCallback((skinId: string | null) => setScreen({ name: 'luck', skinId }), []);
 
-  // Профиль пришёл с сервера — подставляем сохранённое имя, если игрок ещё ничего не вводил.
-  // В Telegram это либо ник из Telegram, либо ник, который игрок сменил сам.
-  // «Игрок» — имя по умолчанию у новичка, его не подставляем.
+  // Профиль пришёл с сервера — подставляем сохранённое там имя (его могли сменить на другом устройстве).
   useEffect(() => {
-    if (!profile || nameEdited.current || profile.displayName === 'Игрок') return;
-    setName(profile.displayName);
+    if (profile) adoptProfileName(profile.displayName);
   }, [profile]);
 
-  const run = async (action: () => Promise<unknown>) => {
-    localStorage.setItem(NAME_KEY, name.trim());
-    setBusy(true);
-    try {
-      await action();
-    } catch (err) {
-      // Текст ошибки сервера уже показан внизу экрана; здесь реагируем только на пароль.
-      if ((err as { code?: string }).code === 'WRONG_PASSWORD') setNeedsPassword(true);
-      else if (!(err as { code?: string }).code) console.error(err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Ждём профиль: в нём ник, который игрок мог сменить. Вход с ником из Telegram затёр бы его.
+  // Ссылка-приглашение: ждём профиль (в нём ник, который игрок мог сменить), и сразу за стол.
+  // Пароль комнаты едет в ссылке. Если войти сразу нельзя (нет имени, старая ссылка без пароля),
+  // открываем экран игры этой комнаты с вписанным кодом.
   useEffect(() => {
-    if (autoJoinDone || !telegramName || !startRoomCode || !profile) return;
+    if (autoJoinDone || !linkRoomCode || !profile) return;
     autoJoinDone = true;
-    const savedName = profile.displayName === 'Игрок' ? telegramName : profile.displayName;
-    void run(() => api.joinRoom({ code: startRoomCode!, name: savedName, invite: inviteFor(startRoomCode!) }));
+    void (async () => {
+      const room = await fetchRoom(linkRoomCode).catch(() => null);
+      if (!room) return;
+      const password = invitePasswordFor(linkRoomCode);
+      const name = getPlayerName();
+      const toGame = () => setScreen({ name: 'game', gameId: room.gameId });
+      if (!name.trim() || (room.hasPassword && !password)) return toGame();
+      await api
+        .joinRoom({
+          code: linkRoomCode,
+          name,
+          invite: inviteFor(linkRoomCode),
+          ...(password ? { password } : {}),
+        })
+        .catch(toGame);
+    })();
   }, [profile]);
 
-  const join = (e: FormEvent) => {
-    e.preventDefault();
-    // Вход по коду — приглашение: новичок засчитается тому, кто поделился ссылкой, или хосту.
-    void run(() => api.joinRoom({ code, name, invite: inviteFor(code), ...(password ? { password } : {}) }));
-  };
-
-  if (screen === 'skins') return <SkinsScreen onBack={() => setScreen('main')} />;
-  if (screen === 'luck')
-    return (
-      <LuckScreen
-        skinId={startLuck?.skinId ?? null}
-        onBack={() => setScreen('main')}
-        onSkins={() => setScreen('skins')}
-      />
-    );
-  if (screen === 'stats' && profile) return <StatsScreen profile={profile} onBack={() => setScreen('main')} />;
+  switch (screen.name) {
+    case 'game':
+      return <GameScreen gameId={screen.gameId} onBack={home} />;
+    case 'luck':
+      return <LuckScreen skinId={screen.skinId} onBack={home} onSkins={() => setScreen({ name: 'skins' })} />;
+    case 'skins':
+      return <SkinsScreen onBack={home} />;
+    case 'settings':
+      return <SettingsScreen onBack={home} />;
+    case 'stats':
+      if (profile) return <StatsScreen profile={profile} onBack={home} />;
+  }
 
   return (
-    <main className="lobby">
-      <LanguageSwitch />
-      <h1 className="logo">GameDeck</h1>
-      <p className="muted">{t.lobby.tagline}</p>
-
-      <label className="field">
-        <span>{t.lobby.yourName}</span>
-        <div className="name-row">
-          {telegramUser && <Avatar url={telegramUser.photo_url} name={name} />}
-          <input
-            value={name}
-            onChange={(e) => {
-              nameEdited.current = true;
-              setName(e.target.value);
-            }}
-            maxLength={24}
-            placeholder={t.lobby.namePlaceholder}
-          />
-        </div>
-      </label>
-
-      {profile && (
-        <>
-          <ProfileStats profile={profile} />
-          <div className="profile-links">
-            <button onClick={() => setScreen('skins')}>{t.lobby.mySkins}</button>
-            <button onClick={() => setScreen('stats')}>{t.lobby.stats}</button>
-          </div>
-          <button className="luck-link" onClick={() => setScreen('luck')}>
-            {t.lobby.luck}
+    <main className="home">
+      <header className="home-header">
+        <h1 className="logo">GameDeck</h1>
+        <nav className="home-actions">
+          <button
+            className="icon-button"
+            onClick={() => setScreen({ name: 'skins' })}
+            aria-label={t.lobby.mySkins}
+            title={t.lobby.mySkins}
+          >
+            <SkinsIcon />
           </button>
-        </>
-      )}
+          <button
+            className="icon-button"
+            onClick={() => setScreen({ name: 'stats' })}
+            disabled={!profile}
+            aria-label={t.lobby.stats}
+            title={t.lobby.stats}
+          >
+            <StatsIcon />
+          </button>
+          <button
+            className="icon-button"
+            onClick={() => setScreen({ name: 'settings' })}
+            aria-label={t.lobby.settings}
+            title={t.lobby.settings}
+          >
+            <SettingsIcon />
+          </button>
+        </nav>
+      </header>
+
+      <LuckWidget onDetails={openLuck} />
+      <button className="ghost luck-rules" onClick={() => openLuck(null)}>
+        {t.lobby.luckRules}
+      </button>
+
+      <div className="coins-card">
+        <span className="coins-card__icon" aria-hidden>
+          🪙
+        </span>
+        <b>{profile?.coins ?? '—'}</b>
+        <span className="muted">{t.profile.coins}</span>
+      </div>
 
       <div className="field">
         <span>{t.lobby.whatToPlay}</span>
-        <GamePicker
-          value={gameId}
-          onChange={(id) => {
-            setGameId(id);
-            saveGameChoice(id);
-          }}
-        />
+        <GameCards profile={profile} onPick={(gameId) => setScreen({ name: 'game', gameId })} />
       </div>
-
-      <label className="field">
-        <span>{t.lobby.roomPassword}</span>
-        <input
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          maxLength={32}
-          placeholder={t.lobby.roomPasswordPlaceholder}
-        />
-      </label>
-
-      <button
-        className="primary"
-        disabled={busy || !name.trim()}
-        onClick={() =>
-          run(() => api.createRoom({ name, settings: { gameId, ...(newPassword ? { password: newPassword } : {}) } }))
-        }
-      >
-        {t.lobby.create}
-      </button>
-
-      <RoomList
-        name={name}
-        onJoin={(roomCode, roomPassword) =>
-          run(() => api.joinRoom({ code: roomCode, name, ...(roomPassword ? { password: roomPassword } : {}) }))
-        }
-      />
-
-      <div className="divider">{t.lobby.joinByCode}</div>
-
-      <form className="join" onSubmit={join}>
-        <input
-          className="code-input"
-          value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
-          maxLength={5}
-          placeholder="*****"
-          aria-label={t.lobby.codeAria}
-        />
-        {needsPassword && (
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={t.lobby.password}
-          />
-        )}
-        <button disabled={busy || !name.trim() || code.length !== 5}>{t.lobby.join}</button>
-      </form>
     </main>
   );
 }

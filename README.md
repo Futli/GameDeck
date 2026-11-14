@@ -125,7 +125,7 @@ docker compose up -d --build
 | `PORT`                | `3000`          | Порт HTTP и WebSocket                                                 |
 | `DISCONNECT_GRACE_MS` | `60000`         | Сколько ждать отключившегося игрока, прежде чем убрать его из комнаты |
 | `DATABASE_URL`        | `./data/pglite` | `postgres://...` для PostgreSQL или путь к папке встроенного PGlite   |
-| `STARTING_COINS`      | `500`           | Монеты, которые получает новый игрок                                  |
+| `STARTING_COINS`      | `0`             | Монеты, которые получает новый игрок                                  |
 | `LOG_LEVEL`           | `info`          | Уровень логов Fastify (`debug`, `info`, `warn`, `error`)              |
 
 ## Скрипты

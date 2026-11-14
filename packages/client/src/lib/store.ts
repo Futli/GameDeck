@@ -14,6 +14,8 @@ export interface ClientState {
   notice: string | null;
   /** https://t.me/<бот>/<приложение> из /api/config; null — приглашаем ссылкой на сайт. */
   telegramAppUrl: string | null;
+  /** Бот присылает «Кубик удачи» в чат (TELEGRAM_CHAT_WIDGET): тогда есть кнопка «Открыть виджет в чате». */
+  chatWidget: boolean;
 }
 
 let state: ClientState = {
@@ -24,6 +26,7 @@ let state: ClientState = {
   lastMatch: null,
   notice: null,
   telegramAppUrl: null,
+  chatWidget: false,
 };
 const listeners = new Set<() => void>();
 

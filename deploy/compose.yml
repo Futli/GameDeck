@@ -29,13 +29,15 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://gamedeck:${POSTGRES_PASSWORD:?укажите POSTGRES_PASSWORD в .env}@postgres:5432/gamedeck
-      STARTING_COINS: ${STARTING_COINS:-500}
+      STARTING_COINS: ${STARTING_COINS:-0}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Вход через Telegram Mini App. Пусто — игра работает только как сайт.
       BOT_TOKEN: ${BOT_TOKEN:-}
       TELEGRAM_APP_URL: ${TELEGRAM_APP_URL:-}
       # Бот с виджетом «Кубик удачи»: 1 — сервер сам получает сообщения бота.
       TELEGRAM_BOT_POLLING: ${TELEGRAM_BOT_POLLING:-}
+      # Виджет «Кубик удачи» в чате с ботом: 0 — не присылать, вести в Mini App.
+      TELEGRAM_CHAT_WIDGET: ${TELEGRAM_CHAT_WIDGET:-1}
       # HTTP-прокси до api.telegram.org. Для контейнера xray ниже: http://xray:8118
       TELEGRAM_PROXY_URL: ${TELEGRAM_PROXY_URL:-}
       WIDGET_ROLL_INTERVAL_SEC: ${WIDGET_ROLL_INTERVAL_SEC:-10800}

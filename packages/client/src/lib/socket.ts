@@ -44,15 +44,15 @@ socket.on('connect_error', (err) => {
 
 // Ссылка на Mini App для приглашений. Не пришла — ничего страшного, пригласим ссылкой на сайт.
 fetch('/api/config')
-  .then((r) => r.json() as Promise<{ telegramAppUrl: string | null }>)
-  .then(({ telegramAppUrl }) => setState({ telegramAppUrl }))
+  .then((r) => r.json() as Promise<{ telegramAppUrl: string | null; chatWidget: boolean }>)
+  .then(({ telegramAppUrl, chatWidget }) => setState({ telegramAppUrl, chatWidget }))
   .catch(() => {});
 socket.on('disconnect', () => setState({ connected: false }));
 
 let sessionToken: string | null = null;
 
 /** Профиль для главного экрана. Ошибку не показываем: без статистики играть можно. */
-function loadProfile(): void {
+export function loadProfile(): void {
   if (!sessionToken) return;
   fetch('/api/me', { headers: { authorization: `Bearer ${sessionToken}` } })
     .then((r) => (r.ok ? (r.json() as Promise<MyProfile>) : null))
